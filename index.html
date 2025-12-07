@@ -12,7 +12,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #1e293b 0%, #7e22ce 50%, #1e293b 100%);
@@ -21,17 +21,17 @@
             padding: 1rem;
             overflow-x: hidden;
         }
-        
+
         .container {
             max-width: 600px;
             margin: 0 auto;
         }
-        
+
         .header {
             text-align: center;
             margin-bottom: 1.5rem;
         }
-        
+
         .header h1 {
             font-size: 2rem;
             font-weight: bold;
@@ -41,11 +41,11 @@
             justify-content: center;
             gap: 0.5rem;
         }
-        
+
         .header p {
             color: #d1d5db;
         }
-        
+
         .card {
             background: rgba(30, 41, 59, 0.5);
             backdrop-filter: blur(10px);
@@ -54,7 +54,17 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
-        
+
+        .text-input {
+            width: 100%;
+            padding: 0.75rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.6);
+            color: white;
+            font-size: 1rem;
+        }
+
         .btn {
             width: 100%;
             padding: 1rem 1.5rem;
@@ -65,70 +75,97 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        
+
         .btn-start {
             background: #16a34a;
             color: white;
         }
-        
+
         .btn-start:hover {
             background: #15803d;
         }
-        
+
         .btn-stop {
             background: #dc2626;
             color: white;
         }
-        
+
         .btn-stop:hover {
             background: #b91c1c;
         }
-        
+
         .alert {
             padding: 1rem;
             border-radius: 0.5rem;
             margin-bottom: 1rem;
         }
-        
+
         .alert-error {
             background: rgba(220, 38, 38, 0.3);
             border: 1px solid #dc2626;
         }
-        
+
         .alert-warning {
             background: rgba(234, 179, 8, 0.3);
             border: 1px solid #eab308;
         }
-        
+
         .metric {
             text-align: center;
             margin-bottom: 1rem;
         }
-        
+
         .metric-value {
             font-size: 2rem;
             font-weight: bold;
             color: #10b981;
         }
-        
+
         .metric-label {
             font-size: 0.875rem;
             color: #9ca3af;
         }
-        
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-resting {
+            background: #3b82f6;
+        }
+
+        .status-climbing {
+            background: #eab308;
+            animation: pulse 1s infinite;
+        }
+
+        .status-landing {
+            background: #ef4444;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .graph-container {
             display: flex;
             justify-content: center;
             margin: 1rem 0;
         }
-        
+
         .graph-note {
             font-size: 0.75rem;
             color: #9ca3af;
             text-align: center;
             margin-top: 0.5rem;
         }
-        
+
         .modal {
             position: fixed;
             inset: 0;
@@ -139,7 +176,7 @@
             padding: 1rem;
             z-index: 50;
         }
-        
+
         .modal-content {
             background: #1e293b;
             border: 1px solid #475569;
@@ -148,37 +185,43 @@
             max-width: 400px;
             width: 100%;
         }
-        
+
         .modal-title {
             font-size: 1.5rem;
             font-weight: bold;
             margin-bottom: 1rem;
         }
-        
+
         .modal-force {
             font-size: 2.5rem;
             font-weight: bold;
             color: #fbbf24;
             margin-bottom: 0.5rem;
         }
-        
+
+        .climb-duration {
+            font-size: 1rem;
+            color: #9ca3af;
+            margin-bottom: 1rem;
+        }
+
         .form-group {
             margin-bottom: 1rem;
         }
-        
+
         .form-label {
             display: block;
             font-size: 0.875rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
-        
+
         .btn-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.5rem;
         }
-        
+
         .btn-success {
             background: #9333ea;
             color: white;
@@ -189,34 +232,34 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        
+
         .btn-success:hover {
             background: #7e22ce;
         }
-        
+
         .btn-success.blue {
             background: #2563eb;
         }
-        
+
         .btn-success.blue:hover {
             background: #1d4ed8;
         }
-        
+
         .grade-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 0.5rem;
         }
-        
+
         .grade-option {
             position: relative;
         }
-        
+
         .grade-input {
             position: absolute;
             opacity: 0;
         }
-        
+
         .grade-label {
             display: block;
             background: #475569;
@@ -227,90 +270,98 @@
             cursor: pointer;
             transition: all 0.3s;
         }
-        
+
         .grade-input:checked + .grade-label {
             background: #16a34a;
         }
-        
+
         .grade-label:hover {
             background: #334155;
         }
-        
+
         .btn-cancel {
             background: #4b5563;
             color: white;
             margin-top: 0.5rem;
         }
-        
+
         .btn-cancel:hover {
             background: #374151;
         }
-        
+
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             text-align: center;
         }
-        
+
         .stat-value {
             font-size: 2rem;
             font-weight: bold;
         }
-        
+
         .stat-value.blue { color: #3b82f6; }
         .stat-value.purple { color: #a855f7; }
         .stat-value.green { color: #10b981; }
-        
+
         .stat-label {
             font-size: 0.875rem;
             color: #9ca3af;
         }
-        
+
         .climb-list {
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
         }
-        
+
         .climb-item {
             background: rgba(71, 85, 105, 0.5);
             border-radius: 0.5rem;
             padding: 1rem;
+        }
+
+        .climb-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            margin-bottom: 0.5rem;
         }
-        
+
         .climb-left {
             display: flex;
             align-items: center;
             gap: 0.75rem;
         }
-        
+
         .climb-icon {
             font-size: 1.5rem;
         }
-        
+
         .climb-grade {
             font-weight: 600;
         }
-        
+
         .climb-time {
             font-size: 0.75rem;
             color: #9ca3af;
         }
-        
-        .climb-force {
-            font-weight: bold;
-            color: #fbbf24;
+
+        .climb-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
         }
-        
-        .climb-force-label {
-            font-size: 0.75rem;
+
+        .climb-stat {
             color: #9ca3af;
         }
-        
+
+        .climb-stat strong {
+            color: white;
+        }
+
         .section-title {
             font-size: 1.25rem;
             font-weight: 600;
@@ -319,7 +370,43 @@
             align-items: center;
             gap: 0.5rem;
         }
-        
+
+        .pending-queue {
+            background: rgba(234, 179, 8, 0.2);
+            border: 1px solid #eab308;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .queue-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .btn-grade {
+            background: #eab308;
+            color: black;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-grade:hover {
+            background: #ca8a04;
+        }
+
         .hidden {
             display: none;
         }
@@ -332,7 +419,7 @@
                 <span>📊</span>
                 Boulder Tracker
             </h1>
-            <p>Detect landings & log your climbs</p>
+            <p>Auto-detect climbs & track progress</p>
         </div>
 
         <div id="permissionError" class="alert alert-error hidden">
@@ -341,6 +428,34 @@
 
         <div id="unsupportedError" class="alert alert-warning hidden">
             <p>Motion sensors not supported on this device.</p>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <span>⚙️</span>
+                Detection Settings
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rest threshold (m/s²)</label>
+                <input id="restThresholdInput" type="number" step="0.1" min="0" class="text-input" value="5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Movement threshold (m/s²)</label>
+                <input id="movementThresholdInput" type="number" step="0.1" min="0" class="text-input" value="6">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Landing threshold (m/s²)</label>
+                <input id="landingThresholdInput" type="number" step="0.1" min="0" class="text-input" value="20">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Prime/finish rest duration (ms)</label>
+                <input id="restDurationInput" type="number" step="100" min="0" class="text-input" value="2000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Minimum climb duration (ms)</label>
+                <input id="minDurationInput" type="number" step="100" min="0" class="text-input" value="3000">
+            </div>
+            <button class="btn btn-success" onclick="applySettings()">Update thresholds</button>
         </div>
 
         <div class="card">
@@ -354,15 +469,25 @@
                 Live Motion
             </div>
             <div class="metric">
+                <div style="margin-bottom: 0.5rem;">
+                    <span id="statusIndicator" class="status-indicator status-resting"></span>
+                    <span id="statusText" style="font-size: 1rem; color: #9ca3af;">Resting</span>
+                </div>
                 <div id="currentAccel" class="metric-value">0.0 m/s²</div>
                 <div class="metric-label">Current acceleration</div>
             </div>
             <div class="graph-container">
-                <canvas id="accelGraph" width="300" height="80"></canvas>
+                <canvas id="accelGraph" width="300" height="100"></canvas>
             </div>
-            <div class="graph-note">
-                Red line = landing threshold (20 m/s²)
+            <div id="graphNote" class="graph-note"></div>
+        </div>
+
+        <div id="pendingQueue" class="card hidden">
+            <div class="section-title">
+                <span>⏳</span>
+                Pending Climbs
             </div>
+            <div id="queueList"></div>
         </div>
 
         <div id="statsCard" class="card hidden">
@@ -397,17 +522,23 @@
 
     <div id="logModal" class="modal hidden">
         <div class="modal-content">
-            <div class="modal-title">Landing Detected! 🎯</div>
+            <div class="modal-title">Grade Your Climb! 🎯</div>
             <div class="metric">
                 <div id="peakForce" class="modal-force">0.0 m/s²</div>
-                <div class="metric-label">Impact force</div>
+                <div class="metric-label">Peak impact</div>
             </div>
+            <div class="climb-duration" id="climbDuration">Duration: 0s</div>
             
+            <div class="graph-container">
+                <canvas id="climbGraph" width="300" height="80"></canvas>
+            </div>
+            <div class="graph-note" style="margin-bottom: 1rem;">Movement profile during climb</div>
+
             <div class="form-group">
                 <label class="form-label">Success Type</label>
                 <div class="btn-grid">
-                    <button class="btn-success" onclick="logClimb('flash')">⚡ Flash</button>
-                    <button class="btn-success blue" onclick="logClimb('top')">🏔️ Top</button>
+                    <button class="btn-success" onclick="setSuccessType('flash')">⚡ Flash</button>
+                    <button class="btn-success blue" onclick="setSuccessType('top')">🏔️ Top</button>
                 </div>
             </div>
 
@@ -442,38 +573,95 @@
                         <input type="radio" name="grade" value="7a" id="grade7a" class="grade-input">
                         <label for="grade7a" class="grade-label">7a</label>
                     </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="7b" id="grade7b" class="grade-input">
+                        <label for="grade7b" class="grade-label">7b</label>
+                    </div>
                 </div>
             </div>
 
-            <button class="btn btn-cancel" onclick="cancelLog()">Cancel</button>
+            <button class="btn btn-start" onclick="saveClimb()">Save Climb</button>
+            <button class="btn btn-cancel" onclick="cancelLog()">Skip</button>
         </div>
     </div>
 
     <script>
         let isTracking = false;
         let currentAccel = 0;
-        let peakForce = 0;
         let accelHistory = [];
         let climbs = [];
-        let cooldown = false;
-        
-        const THRESHOLD = 20;
+        let pendingClimbs = [];
+        let currentClimbData = null;
+        let selectedSuccessType = null;
+
+        // Climb detection state
+        let climbState = 'resting'; // 'resting', 'climbing', 'landing'
+        let climbStartTime = null;
+        let climbMotionData = [];
+        let restStartTime = null;
+        let peakClimbForce = 0;
+        let restPrimeStart = null;
+        let wakeLock = null;
+
+        // Thresholds
+        let REST_THRESHOLD = 5;
+        let MOVEMENT_THRESHOLD = 6;
+        let LANDING_THRESHOLD = 20;
+        let REST_DURATION = 2000; // 2 seconds of rest to complete climb
+        let MIN_CLIMB_DURATION = 3000; // 3 seconds minimum climb
         const HISTORY_LENGTH = 50;
-        
+
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const liveMonitor = document.getElementById('liveMonitor');
         const logModal = document.getElementById('logModal');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
-        
+        const climbCanvas = document.getElementById('climbGraph');
+        const climbCtx = climbCanvas.getContext('2d');
+
+        function applySettings() {
+            REST_THRESHOLD = Number(document.getElementById('restThresholdInput').value) || REST_THRESHOLD;
+            MOVEMENT_THRESHOLD = Number(document.getElementById('movementThresholdInput').value) || MOVEMENT_THRESHOLD;
+            LANDING_THRESHOLD = Number(document.getElementById('landingThresholdInput').value) || LANDING_THRESHOLD;
+            REST_DURATION = Number(document.getElementById('restDurationInput').value) || REST_DURATION;
+            MIN_CLIMB_DURATION = Number(document.getElementById('minDurationInput').value) || MIN_CLIMB_DURATION;
+
+            updateGraphNote();
+        }
+
+        function updateGraphNote() {
+            const note = document.getElementById('graphNote');
+            note.textContent = `Blue = rest threshold (${REST_THRESHOLD} m/s²) | Red = landing threshold (${LANDING_THRESHOLD} m/s²)`;
+        }
+
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                });
+            } catch (err) {
+                console.warn('Wake lock not available', err);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
         async function startTracking() {
             if (typeof DeviceMotionEvent !== 'undefined') {
                 if (typeof DeviceMotionEvent.requestPermission === 'function') {
                     try {
                         const response = await DeviceMotionEvent.requestPermission();
                         if (response === 'granted') {
-                            beginTracking();
+                            await beginTracking();
                         } else {
                             document.getElementById('permissionError').classList.remove('hidden');
                         }
@@ -482,23 +670,27 @@
                         document.getElementById('permissionError').classList.remove('hidden');
                     }
                 } else {
-                    beginTracking();
+                    await beginTracking();
                 }
             } else {
                 document.getElementById('unsupportedError').classList.remove('hidden');
             }
         }
-        
-        function beginTracking() {
+
+        async function beginTracking() {
             isTracking = true;
             accelHistory = [];
+            climbState = 'resting';
+            restPrimeStart = null;
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             liveMonitor.classList.remove('hidden');
-            
+
+            await requestWakeLock();
+
             window.addEventListener('devicemotion', handleMotion);
         }
-        
+
         function stopTracking() {
             isTracking = false;
             window.removeEventListener('devicemotion', handleMotion);
@@ -506,149 +698,418 @@
             stopBtn.classList.add('hidden');
             liveMonitor.classList.add('hidden');
             currentAccel = 0;
+            climbState = 'resting';
+            restPrimeStart = null;
+            releaseWakeLock();
         }
-        
+
         function handleMotion(event) {
             const acc = event.acceleration || event.accelerationIncludingGravity;
             if (!acc) return;
-            
+
             const x = acc.x || 0;
             const y = acc.y || 0;
             const z = acc.z || 0;
-            
+
             const totalAccel = Math.sqrt(x * x + y * y + z * z);
             currentAccel = totalAccel;
-            
+
             document.getElementById('currentAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
-            
+
             accelHistory.push(totalAccel);
             if (accelHistory.length > HISTORY_LENGTH) {
                 accelHistory.shift();
             }
-            
+
             drawGraph();
-            
-            if (totalAccel > THRESHOLD && !cooldown && logModal.classList.contains('hidden')) {
-                cooldown = true;
-                peakForce = totalAccel;
-                showLogModal();
-                
-                setTimeout(() => {
-                    cooldown = false;
-                }, 3000);
+            updateClimbState(totalAccel);
+        }
+
+        function startClimb(now, accel) {
+            climbState = 'climbing';
+            climbStartTime = now;
+            climbMotionData = [accel];
+            peakClimbForce = accel;
+            restStartTime = null;
+            restPrimeStart = null;
+            updateStatusUI('climbing');
+        }
+
+        function updateClimbState(accel) {
+            const now = Date.now();
+
+            if (climbState === 'resting') {
+                if (accel <= REST_THRESHOLD) {
+                    if (!restPrimeStart) {
+                        restPrimeStart = now;
+                    }
+                }
+
+                const restedLongEnough = restPrimeStart && (now - restPrimeStart >= REST_DURATION);
+                if (restedLongEnough && accel > MOVEMENT_THRESHOLD) {
+                    startClimb(now, accel);
+                } else if (accel > MOVEMENT_THRESHOLD && !restedLongEnough) {
+                    restPrimeStart = null;
+                }
+            }
+            else if (climbState === 'climbing') {
+                climbMotionData.push(accel);
+                peakClimbForce = Math.max(peakClimbForce, accel);
+
+                if (accel > LANDING_THRESHOLD) {
+                    climbState = 'landing';
+                    restStartTime = now;
+                    updateStatusUI('landing');
+                }
+                else if (accel <= REST_THRESHOLD) {
+                    if (!restStartTime) {
+                        restStartTime = now;
+                    } else if (now - restStartTime >= REST_DURATION) {
+                        // Climb completed
+                        const duration = now - climbStartTime;
+                        if (duration >= MIN_CLIMB_DURATION) {
+                            completeClimb(duration);
+                        }
+                        climbState = 'resting';
+                        restStartTime = null;
+                        updateStatusUI('resting');
+                    }
+                } else {
+                    restStartTime = null; // Reset if movement detected
+                }
+            }
+            else if (climbState === 'landing') {
+                climbMotionData.push(accel);
+                peakClimbForce = Math.max(peakClimbForce, accel);
+
+                if (accel <= REST_THRESHOLD) {
+                    if (!restStartTime) {
+                        restStartTime = now;
+                    } else if (now - restStartTime >= REST_DURATION) {
+                        // Climb completed with landing
+                        const duration = now - climbStartTime;
+                        if (duration >= MIN_CLIMB_DURATION) {
+                            completeClimb(duration);
+                        }
+                        climbState = 'resting';
+                        restStartTime = null;
+                        updateStatusUI('resting');
+                    }
+                } else {
+                    restStartTime = null;
+                }
             }
         }
-        
+
+        function updateStatusUI(state) {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            
+            indicator.className = 'status-indicator';
+            
+            if (state === 'resting') {
+                indicator.classList.add('status-resting');
+                text.textContent = 'Resting';
+            } else if (state === 'climbing') {
+                indicator.classList.add('status-climbing');
+                text.textContent = 'Climbing...';
+            } else if (state === 'landing') {
+                indicator.classList.add('status-landing');
+                text.textContent = 'Landing Detected!';
+            }
+        }
+
+        function completeClimb(duration) {
+            const climb = {
+                id: Date.now(),
+                timestamp: new Date(),
+                duration: duration,
+                peakForce: peakClimbForce.toFixed(1),
+                motionData: [...climbMotionData]
+            };
+
+            pendingClimbs.push(climb);
+            climbMotionData = [];
+            peakClimbForce = 0;
+            
+            updatePendingQueue();
+        }
+
+        function updatePendingQueue() {
+            const queueCard = document.getElementById('pendingQueue');
+            const queueList = document.getElementById('queueList');
+            
+            if (pendingClimbs.length === 0) {
+                queueCard.classList.add('hidden');
+                return;
+            }
+
+            queueCard.classList.remove('hidden');
+            queueList.innerHTML = '';
+
+            pendingClimbs.forEach((climb, index) => {
+                const item = document.createElement('div');
+                item.className = 'queue-item';
+
+                const durationSec = (climb.duration / 1000).toFixed(0);
+                const info = document.createElement('div');
+                const title = document.createElement('div');
+                title.style.fontWeight = '600';
+                title.textContent = `Climb #${pendingClimbs.length - index}`;
+
+                const meta = document.createElement('div');
+                meta.style.fontSize = '0.875rem';
+                meta.style.color = '#9ca3af';
+                meta.textContent = `${durationSec}s · Peak: ${climb.peakForce} m/s²`;
+
+                const miniGraph = document.createElement('canvas');
+                miniGraph.width = 140;
+                miniGraph.height = 50;
+                miniGraph.style.marginTop = '0.5rem';
+
+                info.appendChild(title);
+                info.appendChild(meta);
+                info.appendChild(miniGraph);
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.alignItems = 'center';
+                actions.style.gap = '0.5rem';
+
+                const gradeBtn = document.createElement('button');
+                gradeBtn.className = 'btn-grade';
+                gradeBtn.textContent = 'Grade Now';
+                gradeBtn.onclick = () => gradeClimb(index);
+
+                actions.appendChild(gradeBtn);
+
+                item.appendChild(info);
+                item.appendChild(actions);
+
+                queueList.appendChild(item);
+                drawPendingGraph(miniGraph, climb.motionData);
+            });
+        }
+
+        function drawPendingGraph(canvasEl, data) {
+            const miniCtx = canvasEl.getContext('2d');
+            miniCtx.fillStyle = '#0f172a';
+            miniCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+
+            if (data.length < 2) return;
+
+            const maxVal = Math.max(...data, 1);
+
+            miniCtx.strokeStyle = '#a855f7';
+            miniCtx.lineWidth = 2;
+            miniCtx.beginPath();
+
+            data.forEach((val, i) => {
+                const x = (i / data.length) * canvasEl.width;
+                const y = canvasEl.height - (val / maxVal) * canvasEl.height;
+
+                if (i === 0) {
+                    miniCtx.moveTo(x, y);
+                } else {
+                    miniCtx.lineTo(x, y);
+                }
+            });
+
+            miniCtx.stroke();
+        }
+
+        function gradeClimb(index) {
+            const climb = pendingClimbs[index];
+            if (!climb) return;
+
+            currentClimbData = { ...climb, index };
+            selectedSuccessType = null;
+
+            document.getElementById('peakForce').textContent = climb.peakForce + ' m/s²';
+            document.getElementById('climbDuration').textContent = 
+                `Duration: ${(climb.duration / 1000).toFixed(0)}s`;
+
+            drawClimbGraph(climb.motionData);
+            logModal.classList.remove('hidden');
+        }
+
+        function drawClimbGraph(data) {
+            climbCtx.fillStyle = '#111827';
+            climbCtx.fillRect(0, 0, climbCanvas.width, climbCanvas.height);
+
+            if (data.length < 2) return;
+
+            const maxVal = Math.max(...data, 1);
+            
+            climbCtx.strokeStyle = '#10b981';
+            climbCtx.lineWidth = 2;
+            climbCtx.beginPath();
+
+            data.forEach((val, i) => {
+                const x = (i / data.length) * climbCanvas.width;
+                const y = climbCanvas.height - (val / maxVal) * climbCanvas.height;
+
+                if (i === 0) {
+                    climbCtx.moveTo(x, y);
+                } else {
+                    climbCtx.lineTo(x, y);
+                }
+            });
+
+            climbCtx.stroke();
+        }
+
         function drawGraph() {
             ctx.fillStyle = '#111827';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const maxVal = Math.max(...accelHistory, LANDING_THRESHOLD);
             
-            const maxVal = Math.max(...accelHistory, THRESHOLD);
-            const thresholdY = canvas.height - (THRESHOLD / maxVal) * canvas.height;
-            
-            ctx.strokeStyle = '#ef4444';
+            // Draw thresholds
+            const restY = canvas.height - (REST_THRESHOLD / maxVal) * canvas.height;
+            const landingY = canvas.height - (LANDING_THRESHOLD / maxVal) * canvas.height;
+
+            ctx.strokeStyle = '#3b82f6';
             ctx.setLineDash([4, 4]);
             ctx.beginPath();
-            ctx.moveTo(0, thresholdY);
-            ctx.lineTo(canvas.width, thresholdY);
+            ctx.moveTo(0, restY);
+            ctx.lineTo(canvas.width, restY);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.moveTo(0, landingY);
+            ctx.lineTo(canvas.width, landingY);
             ctx.stroke();
             ctx.setLineDash([]);
-            
+
             if (accelHistory.length > 1) {
                 ctx.strokeStyle = '#10b981';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
-                
+
                 accelHistory.forEach((val, i) => {
                     const x = (i / HISTORY_LENGTH) * canvas.width;
                     const y = canvas.height - (val / maxVal) * canvas.height;
-                    
+
                     if (i === 0) {
                         ctx.moveTo(x, y);
                     } else {
                         ctx.lineTo(x, y);
                     }
                 });
-                
+
                 ctx.stroke();
             }
         }
-        
-        function showLogModal() {
-            document.getElementById('peakForce').textContent = peakForce.toFixed(1) + ' m/s²';
-            logModal.classList.remove('hidden');
+
+        function setSuccessType(type) {
+            selectedSuccessType = type;
         }
-        
-        function logClimb(success) {
+
+        function saveClimb() {
+            if (!currentClimbData) return;
+            
+            if (!selectedSuccessType) {
+                alert('Please select Flash or Top');
+                return;
+            }
+
             const gradeInput = document.querySelector('input[name="grade"]:checked');
             if (!gradeInput) {
                 alert('Please select a grade');
                 return;
             }
-            
+
             const climb = {
-                id: Date.now(),
-                timestamp: new Date(),
-                success: success,
+                id: currentClimbData.id,
+                timestamp: currentClimbData.timestamp,
+                duration: currentClimbData.duration,
+                success: selectedSuccessType,
                 grade: gradeInput.value,
-                force: peakForce.toFixed(1)
+                force: currentClimbData.peakForce
             };
-            
+
             climbs.unshift(climb);
+            pendingClimbs.splice(currentClimbData.index, 1);
+            
             updateUI();
+            updatePendingQueue();
             cancelLog();
         }
-        
+
         function cancelLog() {
             logModal.classList.add('hidden');
+            currentClimbData = null;
+            selectedSuccessType = null;
             const gradeInputs = document.querySelectorAll('input[name="grade"]');
             gradeInputs.forEach(input => input.checked = false);
         }
-        
+
+
         function updateUI() {
             const total = climbs.length;
             const flashes = climbs.filter(c => c.success === 'flash').length;
             const tops = climbs.filter(c => c.success === 'top').length;
-            
+
             document.getElementById('totalClimbs').textContent = total;
             document.getElementById('flashCount').textContent = flashes;
             document.getElementById('topCount').textContent = tops;
-            
+
             if (total > 0) {
                 document.getElementById('statsCard').classList.remove('hidden');
                 document.getElementById('historyCard').classList.remove('hidden');
             }
-            
+
             const climbList = document.getElementById('climbList');
             climbList.innerHTML = '';
-            
+
             climbs.forEach(climb => {
                 const item = document.createElement('div');
                 item.className = 'climb-item';
-                
+
                 const icon = climb.success === 'flash' ? '⚡' : '🏔️';
-                const time = climb.timestamp.toLocaleTimeString();
-                
+                const time = new Date(climb.timestamp).toLocaleTimeString();
+                const durationSec = (climb.duration / 1000).toFixed(0);
+
                 item.innerHTML = `
-                    <div class="climb-left">
-                        <div class="climb-icon">${icon}</div>
-                        <div>
-                            <div class="climb-grade">Grade ${climb.grade}</div>
-                            <div class="climb-time">${time}</div>
+                    <div class="climb-header">
+                        <div class="climb-left">
+                            <div class="climb-icon">${icon}</div>
+                            <div>
+                                <div class="climb-grade">V${climb.grade}</div>
+                                <div class="climb-time">${time}</div>
+                            </div>
                         </div>
+                        <div class="climb-grade">${climb.success === 'flash' ? 'Flash' : 'Top'}</div>
                     </div>
-                    <div style="text-align: right;">
-                        <div class="climb-force">${climb.force} m/s²</div>
-                        <div class="climb-force-label">impact</div>
+                    <div class="climb-stats">
+                        <div class="climb-stat"><strong>${durationSec}s</strong> time</div>
+                        <div class="climb-stat"><strong>${climb.force}</strong> m/s² peak</div>
+                        <div class="climb-stat"><strong>V${climb.grade}</strong> grade</div>
                     </div>
                 `;
-                
+
                 climbList.appendChild(item);
             });
         }
-        
+
         startBtn.addEventListener('click', startTracking);
         stopBtn.addEventListener('click', stopTracking);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && isTracking) {
+                requestWakeLock();
+            } else if (!isTracking) {
+                releaseWakeLock();
+            }
+        });
+
+        window.addEventListener('beforeunload', releaseWakeLock);
+
+        applySettings();
     </script>
+
 </body>
+
 </html>
