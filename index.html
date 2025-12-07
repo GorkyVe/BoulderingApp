@@ -599,8 +599,7 @@
             <div class="graph-note" id="calibrationStatus" style="margin-top: 0.5rem;"></div>
             <div id="calibrationResults" class="graph-note" style="margin-top: 0.5rem;"></div>
             <div class="btn-grid" style="margin-top: 1rem;">
-                <button id="startCalibrationBtn" class="btn btn-start" onclick="startCalibrationGuide()">Start calibration</button>
-                <button id="stepActionBtn" class="btn btn-secondary" onclick="toggleCalibrationStep()" disabled>Record climb</button>
+                <button id="startCalibrationBtn" class="btn btn-start" onclick="toggleCalibrationStep()">Next step</button>
                 <button class="btn btn-cancel" onclick="closeCalibration()">Close</button>
             </div>
         </div>
@@ -700,6 +699,7 @@
         let REST_DURATION = 3000; // default 0.05 minutes
         let MIN_CLIMB_DURATION = 6000; // default 0.1 minutes
         const HISTORY_LENGTH = 50;
+        let stateMarkers = [];
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -744,7 +744,7 @@
                 return;
             }
 
-            graphNote.textContent = `Blue = rest threshold (${REST_THRESHOLD} m/s²) | Red = landing threshold (${LANDING_THRESHOLD} m/s²)`;
+            graphNote.textContent = `Blue = rest (${REST_THRESHOLD} m/s²) | Amber = movement (${MOVEMENT_THRESHOLD} m/s²) | Red = landing (${LANDING_THRESHOLD} m/s²)`;
         }
 
         function setDetectionMode(mode) {
@@ -945,23 +945,35 @@
             accelHistory.push(totalAccel);
             if (accelHistory.length > HISTORY_LENGTH) {
                 accelHistory.shift();
+                stateMarkers = stateMarkers
+                    .map(marker => ({ ...marker, index: marker.index - 1 }))
+                    .filter(marker => marker.index >= 0);
             }
 
+            const sampleIndex = accelHistory.length - 1;
+
             drawGraph();
-            updateClimbState(totalAccel);
+            updateClimbState(totalAccel, sampleIndex);
         }
 
-        function startClimb(now, accel) {
+        function addStateMarker(index, state) {
+            if (index >= 0) {
+                stateMarkers.push({ index, state });
+            }
+        }
+
+        function startClimb(now, accel, sampleIndex) {
             climbState = 'climbing';
             climbStartTime = now;
             climbMotionData = [accel];
             peakClimbForce = accel;
             restStartTime = null;
             restPrimeStart = null;
+            addStateMarker(sampleIndex, 'climbing');
             updateStatusUI('climbing');
         }
 
-        function updateClimbState(accel) {
+        function updateClimbState(accel, sampleIndex) {
             const now = Date.now();
 
             if (climbState === 'resting') {
@@ -973,7 +985,7 @@
 
                 const restedLongEnough = restPrimeStart && (now - restPrimeStart >= REST_DURATION);
                 if (restedLongEnough && accel > MOVEMENT_THRESHOLD) {
-                    startClimb(now, accel);
+                    startClimb(now, accel, sampleIndex);
                 } else if (accel > MOVEMENT_THRESHOLD && !restedLongEnough) {
                     restPrimeStart = null;
                 }
@@ -985,6 +997,7 @@
                 if (accel > LANDING_THRESHOLD) {
                     climbState = 'landing';
                     restStartTime = now;
+                    addStateMarker(sampleIndex, 'landing');
                     updateStatusUI('landing');
                 }
                 else if (accel <= REST_THRESHOLD) {
@@ -1194,9 +1207,10 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const maxVal = Math.max(...accelHistory, LANDING_THRESHOLD);
-            
+
             // Draw thresholds
             const restY = canvas.height - (REST_THRESHOLD / maxVal) * canvas.height;
+            const movementY = canvas.height - (MOVEMENT_THRESHOLD / maxVal) * canvas.height;
             const landingY = canvas.height - (LANDING_THRESHOLD / maxVal) * canvas.height;
 
             ctx.strokeStyle = '#3b82f6';
@@ -1206,12 +1220,30 @@
             ctx.lineTo(canvas.width, restY);
             ctx.stroke();
 
+            ctx.strokeStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.moveTo(0, movementY);
+            ctx.lineTo(canvas.width, movementY);
+            ctx.stroke();
+
             ctx.strokeStyle = '#ef4444';
             ctx.beginPath();
             ctx.moveTo(0, landingY);
             ctx.lineTo(canvas.width, landingY);
             ctx.stroke();
             ctx.setLineDash([]);
+
+            stateMarkers.forEach(marker => {
+                const x = (marker.index / HISTORY_LENGTH) * canvas.width;
+                const color = marker.state === 'climbing' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(239, 68, 68, 0.2)';
+                ctx.fillStyle = color;
+                ctx.fillRect(Math.max(0, x - 6), 0, 12, canvas.height);
+
+                ctx.fillStyle = marker.state === 'climbing' ? '#fbbf24' : '#f87171';
+                ctx.beginPath();
+                ctx.arc(x, 12, 5, 0, Math.PI * 2);
+                ctx.fill();
+            });
 
             if (accelHistory.length > 1) {
                 ctx.strokeStyle = '#10b981';
@@ -1368,8 +1400,9 @@
         const calibrationResults = document.getElementById('calibrationResults');
         const calibrationStepsList = document.getElementById('calibrationStepsList');
         const startCalibrationBtn = document.getElementById('startCalibrationBtn');
-        const stepActionBtn = document.getElementById('stepActionBtn');
         const calibrationSummary = document.getElementById('calibrationSummary');
+        let calibrationMotionDetected = false;
+        let calibrationStepTimer = null;
 
         function openCalibration() {
             if (isTracking) {
@@ -1391,12 +1424,26 @@
             calibrationRecording = false;
             calibrationSamples = [];
             calibrationResultsData = [];
-            calibrationStatus.textContent = 'Press start to begin capturing climbs.';
+            calibrationMotionDetected = false;
+            calibrationStatus.textContent = 'Press Next step to request motion access and start capturing climbs.';
             calibrationResults.textContent = '';
-            startCalibrationBtn.disabled = false;
-            stepActionBtn.disabled = true;
-            stepActionBtn.textContent = 'Record climb';
             renderCalibrationSteps();
+            updateCalibrationButtonLabel();
+        }
+
+        function updateCalibrationButtonLabel() {
+            let label = 'Next step';
+
+            if (calibrationActive && calibrationIndex < calibrationSteps.length) {
+                label = calibrationRecording
+                    ? `Recording step ${calibrationIndex + 1}...`
+                    : `Next step (${calibrationIndex + 1} of ${calibrationSteps.length})`;
+            } else if (calibrationIndex >= calibrationSteps.length) {
+                label = 'Restart calibration';
+            }
+
+            startCalibrationBtn.textContent = label;
+            startCalibrationBtn.disabled = false;
         }
 
         function renderCalibrationSteps() {
@@ -1421,7 +1468,8 @@
                 title.textContent = step.title;
                 const desc = document.createElement('div');
                 desc.className = 'climb-time';
-                desc.textContent = step.description;
+                const progress = `Step ${index + 1} of ${calibrationSteps.length}`;
+                desc.textContent = `${progress} · ${step.description}`;
                 metaWrap.appendChild(title);
                 metaWrap.appendChild(desc);
                 left.appendChild(icon);
@@ -1432,7 +1480,9 @@
                 if (calibrationResultsData[index]) {
                     badge.textContent = `${calibrationResultsData[index].peak.toFixed(1)} m/s²`;
                 } else if (index === calibrationIndex && calibrationActive) {
-                    badge.textContent = calibrationRecording ? 'Recording...' : 'Ready';
+                    badge.textContent = calibrationRecording ? 'Recording...' : 'Up next';
+                } else if (index < calibrationIndex) {
+                    badge.textContent = 'Complete';
                 } else {
                     badge.textContent = 'Pending';
                 }
@@ -1447,7 +1497,9 @@
         function stopCalibrationCapture() {
             calibrationRecording = false;
             calibrationActive = false;
+            calibrationMotionDetected = false;
             window.removeEventListener('devicemotion', handleCalibrationMotion);
+            clearTimeout(calibrationStepTimer);
         }
 
         async function startCalibrationGuide() {
@@ -1457,13 +1509,11 @@
             calibrationActive = true;
             calibrationIndex = 0;
             calibrationResultsData = [];
-            calibrationStatus.textContent = 'Follow each step and tap "Record climb" before you move.';
-            startCalibrationBtn.disabled = true;
-            stepActionBtn.disabled = false;
-            stepActionBtn.textContent = 'Record climb';
-            calibrationSummary.textContent = 'Calibrating... perform each climb when prompted.';
+            calibrationSummary.textContent = 'Calibrating... we will auto-finish each sample when motion is detected.';
             window.addEventListener('devicemotion', handleCalibrationMotion);
+            beginCalibrationStep();
             renderCalibrationSteps();
+            updateCalibrationButtonLabel();
         }
 
         function handleCalibrationMotion(event) {
@@ -1473,28 +1523,69 @@
 
             const totalAccel = Math.sqrt((acc.x || 0) ** 2 + (acc.y || 0) ** 2 + (acc.z || 0) ** 2);
             calibrationSamples.push(totalAccel);
+
+            if (!calibrationMotionDetected && totalAccel > MOVEMENT_THRESHOLD) {
+                calibrationMotionDetected = true;
+                calibrationStatus.textContent = `${calibrationSteps[calibrationIndex].title}: motion detected, finishing soon...`;
+                setTimeout(() => {
+                    if (calibrationRecording) {
+                        finishCalibrationRecording();
+                    }
+                }, 1200);
+            }
         }
 
         function toggleCalibrationStep() {
-            if (!calibrationActive) return;
-
-            if (!calibrationRecording) {
-                calibrationSamples = [];
-                calibrationRecording = true;
-                calibrationStatus.textContent = `Recording: ${calibrationSteps[calibrationIndex].title}. Perform the climb, then tap again to finish.`;
-                stepActionBtn.textContent = 'Finish step';
-            } else {
-                calibrationRecording = false;
-                stepActionBtn.textContent = 'Record climb';
-                processCalibrationStep();
+            if (!calibrationActive) {
+                startCalibrationGuide();
+                return;
             }
 
+            if (calibrationIndex >= calibrationSteps.length) {
+                resetCalibrationState();
+                return;
+            }
+
+            if (calibrationRecording) {
+                finishCalibrationRecording();
+                return;
+            }
+
+            beginCalibrationStep();
             renderCalibrationSteps();
+        }
+
+        function beginCalibrationStep() {
+            calibrationSamples = [];
+            calibrationMotionDetected = false;
+            calibrationRecording = true;
+
+            const step = calibrationSteps[calibrationIndex];
+            calibrationStatus.textContent = `Step ${calibrationIndex + 1} of ${calibrationSteps.length}: ${step.title}. Recording automatically—move when ready.`;
+
+            clearTimeout(calibrationStepTimer);
+            calibrationStepTimer = setTimeout(() => {
+                if (calibrationRecording) {
+                    calibrationStatus.textContent = `${step.title}: timed window reached, finishing capture.`;
+                    finishCalibrationRecording();
+                }
+            }, 8000);
+
+            updateCalibrationButtonLabel();
+        }
+
+        function finishCalibrationRecording() {
+            calibrationRecording = false;
+            clearTimeout(calibrationStepTimer);
+            processCalibrationStep();
+            updateCalibrationButtonLabel();
         }
 
         function processCalibrationStep() {
             if (calibrationSamples.length === 0) {
                 calibrationStatus.textContent = 'No motion detected. Please retry this step.';
+                calibrationRecording = false;
+                updateCalibrationButtonLabel();
                 return;
             }
 
@@ -1509,19 +1600,20 @@
                 return;
             }
 
-            calibrationStatus.textContent += ' Start the next climb when ready.';
+            calibrationStatus.textContent += ` Next: Step ${calibrationIndex + 1} of ${calibrationSteps.length}.`;
             renderCalibrationSteps();
+            updateCalibrationButtonLabel();
         }
 
         function finishCalibration() {
             calibrationActive = false;
             calibrationRecording = false;
-            stepActionBtn.disabled = true;
-            startCalibrationBtn.disabled = false;
             window.removeEventListener('devicemotion', handleCalibrationMotion);
+            clearTimeout(calibrationStepTimer);
 
             if (calibrationResultsData.length < calibrationSteps.length) {
                 calibrationStatus.textContent = 'Calibration incomplete. Capture all three climbs to generate recommendations.';
+                updateCalibrationButtonLabel();
                 return;
             }
 
@@ -1535,6 +1627,7 @@
             calibrationSummary.textContent = `Rest ${recommendations.rest} | Movement ${recommendations.movement} | Landing ${recommendations.landing} m/s²`;
             applyCalibrationRecommendations(recommendations);
             renderCalibrationSteps();
+            updateCalibrationButtonLabel();
         }
 
         function generateCalibrationRecommendations() {
