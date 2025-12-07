@@ -430,37 +430,28 @@
             <p>Motion sensors not supported on this device.</p>
         </div>
 
-        <div class="card">
+        <div class="card highlight">
             <div class="section-title">
-                <span>⚙️</span>
-                Detection Settings
+                <span>🎯</span>
+                Start Tracking
+                <button class="action-link" onclick="openSettings()">Detection Settings</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Rest threshold (m/s²)</label>
-                <input id="restThresholdInput" type="number" step="0.1" min="0" class="text-input" value="5">
+            <div class="mode-toggle">
+                <button id="autoModeBtn" class="mode-option active" onclick="setDetectionMode('auto')">Automatic detection</button>
+                <button id="manualModeBtn" class="mode-option" onclick="setDetectionMode('manual')">Manual start / stop</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Movement threshold (m/s²)</label>
-                <input id="movementThresholdInput" type="number" step="0.1" min="0" class="text-input" value="6">
+            <div class="btn-grid">
+                <button id="startBtn" class="btn btn-start">Start Tracking</button>
+                <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
             </div>
-            <div class="form-group">
-                <label class="form-label">Landing threshold (m/s²)</label>
-                <input id="landingThresholdInput" type="number" step="0.1" min="0" class="text-input" value="20">
+            <div id="manualControls" class="hidden">
+                <div class="form-label" style="margin-top: 1rem;">Manual climb controls</div>
+                <div class="btn-grid">
+                    <button id="manualStartBtn" class="btn btn-secondary" onclick="manualStartClimb()">Start climb</button>
+                    <button id="manualStopBtn" class="btn btn-success" onclick="manualStopClimb()">Finish climb</button>
+                </div>
+                <div class="manual-note">Use this mode when automatic motion detection isn't available. Tap start when you leave the ground and finish when you land.</div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Prime/finish rest duration (ms)</label>
-                <input id="restDurationInput" type="number" step="100" min="0" class="text-input" value="2000">
-            </div>
-            <div class="form-group">
-                <label class="form-label">Minimum climb duration (ms)</label>
-                <input id="minDurationInput" type="number" step="100" min="0" class="text-input" value="3000">
-            </div>
-            <button class="btn btn-success" onclick="applySettings()">Update thresholds</button>
-        </div>
-
-        <div class="card">
-            <button id="startBtn" class="btn btn-start">Start Tracking</button>
-            <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
         </div>
 
         <div id="liveMonitor" class="card hidden">
@@ -517,6 +508,36 @@
                 Climb History
             </div>
             <div id="climbList" class="climb-list"></div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-title">Detection Settings</div>
+            <div class="form-group">
+                <label class="form-label">Rest threshold (m/s²)</label>
+                <input id="restThresholdInput" type="number" step="0.1" min="0" class="text-input" value="5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Movement threshold (m/s²)</label>
+                <input id="movementThresholdInput" type="number" step="0.1" min="0" class="text-input" value="6">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Landing threshold (m/s²)</label>
+                <input id="landingThresholdInput" type="number" step="0.1" min="0" class="text-input" value="20">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Prime/finish rest duration (minutes)</label>
+                <input id="restDurationInput" type="number" step="0.05" min="0" class="text-input" value="0.05">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Minimum climb duration (minutes)</label>
+                <input id="minDurationInput" type="number" step="0.05" min="0" class="text-input" value="0.1">
+            </div>
+            <div class="btn-grid">
+                <button class="btn btn-success" onclick="applySettings()">Save settings</button>
+                <button class="btn btn-cancel" onclick="closeSettings()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -602,19 +623,26 @@
         let peakClimbForce = 0;
         let restPrimeStart = null;
         let wakeLock = null;
+        let detectionMode = 'auto';
+        let manualClimbStart = null;
 
         // Thresholds
         let REST_THRESHOLD = 5;
         let MOVEMENT_THRESHOLD = 6;
         let LANDING_THRESHOLD = 20;
-        let REST_DURATION = 2000; // 2 seconds of rest to complete climb
-        let MIN_CLIMB_DURATION = 3000; // 3 seconds minimum climb
+        let REST_DURATION = 3000; // default 0.05 minutes
+        let MIN_CLIMB_DURATION = 6000; // default 0.1 minutes
         const HISTORY_LENGTH = 50;
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const liveMonitor = document.getElementById('liveMonitor');
         const logModal = document.getElementById('logModal');
+        const graphNote = document.getElementById('graphNote');
+        const manualControls = document.getElementById('manualControls');
+        const settingsModal = document.getElementById('settingsModal');
+        const autoModeBtn = document.getElementById('autoModeBtn');
+        const manualModeBtn = document.getElementById('manualModeBtn');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
         const climbCanvas = document.getElementById('climbGraph');
@@ -624,15 +652,60 @@
             REST_THRESHOLD = Number(document.getElementById('restThresholdInput').value) || REST_THRESHOLD;
             MOVEMENT_THRESHOLD = Number(document.getElementById('movementThresholdInput').value) || MOVEMENT_THRESHOLD;
             LANDING_THRESHOLD = Number(document.getElementById('landingThresholdInput').value) || LANDING_THRESHOLD;
-            REST_DURATION = Number(document.getElementById('restDurationInput').value) || REST_DURATION;
-            MIN_CLIMB_DURATION = Number(document.getElementById('minDurationInput').value) || MIN_CLIMB_DURATION;
+            const restMinutes = Number(document.getElementById('restDurationInput').value);
+            const minMinutes = Number(document.getElementById('minDurationInput').value);
+
+            if (!Number.isNaN(restMinutes)) {
+                REST_DURATION = restMinutes * 60000;
+            }
+
+            if (!Number.isNaN(minMinutes)) {
+                MIN_CLIMB_DURATION = minMinutes * 60000;
+            }
+
+            updateGraphNote();
+            closeSettings();
+        }
+
+        function updateGraphNote() {
+            if (detectionMode === 'manual') {
+                graphNote.textContent = 'Manual control enabled — automatic detection is paused.';
+                return;
+            }
+
+            graphNote.textContent = `Blue = rest threshold (${REST_THRESHOLD} m/s²) | Red = landing threshold (${LANDING_THRESHOLD} m/s²)`;
+        }
+
+        function setDetectionMode(mode) {
+            if (detectionMode !== mode && isTracking) {
+                stopTracking();
+            }
+
+            detectionMode = mode;
+            autoModeBtn.classList.toggle('active', mode === 'auto');
+            manualModeBtn.classList.toggle('active', mode === 'manual');
+
+            if (mode === 'manual') {
+                liveMonitor.classList.add('hidden');
+                if (isTracking) {
+                    manualControls.classList.remove('hidden');
+                }
+            } else {
+                manualControls.classList.add('hidden');
+                if (isTracking) {
+                    liveMonitor.classList.remove('hidden');
+                }
+            }
 
             updateGraphNote();
         }
 
-        function updateGraphNote() {
-            const note = document.getElementById('graphNote');
-            note.textContent = `Blue = rest threshold (${REST_THRESHOLD} m/s²) | Red = landing threshold (${LANDING_THRESHOLD} m/s²)`;
+        function openSettings() {
+            settingsModal.classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            settingsModal.classList.add('hidden');
         }
 
         async function requestWakeLock() {
@@ -656,12 +729,17 @@
         }
 
         async function startTracking() {
+            if (detectionMode === 'manual') {
+                beginManualTracking();
+                return;
+            }
+
             if (typeof DeviceMotionEvent !== 'undefined') {
                 if (typeof DeviceMotionEvent.requestPermission === 'function') {
                     try {
                         const response = await DeviceMotionEvent.requestPermission();
                         if (response === 'granted') {
-                            await beginTracking();
+                            await beginAutoTracking();
                         } else {
                             document.getElementById('permissionError').classList.remove('hidden');
                         }
@@ -670,25 +748,38 @@
                         document.getElementById('permissionError').classList.remove('hidden');
                     }
                 } else {
-                    await beginTracking();
+                    await beginAutoTracking();
                 }
             } else {
                 document.getElementById('unsupportedError').classList.remove('hidden');
             }
         }
 
-        async function beginTracking() {
+        async function beginAutoTracking() {
             isTracking = true;
             accelHistory = [];
             climbState = 'resting';
             restPrimeStart = null;
+            manualClimbStart = null;
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             liveMonitor.classList.remove('hidden');
+            manualControls.classList.add('hidden');
 
             await requestWakeLock();
 
             window.addEventListener('devicemotion', handleMotion);
+        }
+
+        function beginManualTracking() {
+            isTracking = true;
+            climbState = 'resting';
+            manualClimbStart = null;
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            manualControls.classList.remove('hidden');
+            liveMonitor.classList.add('hidden');
+            updateGraphNote();
         }
 
         function stopTracking() {
@@ -697,10 +788,42 @@
             startBtn.classList.remove('hidden');
             stopBtn.classList.add('hidden');
             liveMonitor.classList.add('hidden');
+            manualControls.classList.add('hidden');
             currentAccel = 0;
             climbState = 'resting';
             restPrimeStart = null;
+            manualClimbStart = null;
             releaseWakeLock();
+        }
+
+        function manualStartClimb() {
+            if (!isTracking || detectionMode !== 'manual') return;
+            if (manualClimbStart) return;
+
+            manualClimbStart = Date.now();
+            climbState = 'climbing';
+            updateStatusUI('climbing');
+        }
+
+        function manualStopClimb() {
+            if (!isTracking || detectionMode !== 'manual') return;
+            if (!manualClimbStart) return;
+
+            const duration = Date.now() - manualClimbStart;
+            const climb = {
+                id: Date.now(),
+                timestamp: new Date(),
+                duration: duration,
+                peakForce: 'Manual',
+                motionData: [],
+                manual: true
+            };
+
+            pendingClimbs.push(climb);
+            manualClimbStart = null;
+            climbState = 'resting';
+            updatePendingQueue();
+            updateStatusUI('resting');
         }
 
         function handleMotion(event) {
@@ -852,6 +975,7 @@
                 item.className = 'queue-item';
 
                 const durationSec = (climb.duration / 1000).toFixed(0);
+                const peakDisplay = climb.peakForce === 'Manual' ? 'Manual entry' : `${climb.peakForce} m/s²`;
                 const info = document.createElement('div');
                 const title = document.createElement('div');
                 title.style.fontWeight = '600';
@@ -860,7 +984,7 @@
                 const meta = document.createElement('div');
                 meta.style.fontSize = '0.875rem';
                 meta.style.color = '#9ca3af';
-                meta.textContent = `${durationSec}s · Peak: ${climb.peakForce} m/s²`;
+                meta.textContent = `${durationSec}s · Peak: ${peakDisplay}`;
 
                 const miniGraph = document.createElement('canvas');
                 miniGraph.width = 140;
@@ -925,8 +1049,9 @@
             currentClimbData = { ...climb, index };
             selectedSuccessType = null;
 
-            document.getElementById('peakForce').textContent = climb.peakForce + ' m/s²';
-            document.getElementById('climbDuration').textContent = 
+            const peakValue = climb.peakForce === 'Manual' ? 'Manual entry' : `${climb.peakForce} m/s²`;
+            document.getElementById('peakForce').textContent = peakValue;
+            document.getElementById('climbDuration').textContent =
                 `Duration: ${(climb.duration / 1000).toFixed(0)}s`;
 
             drawClimbGraph(climb.motionData);
@@ -1071,6 +1196,7 @@
                 const icon = climb.success === 'flash' ? '⚡' : '🏔️';
                 const time = new Date(climb.timestamp).toLocaleTimeString();
                 const durationSec = (climb.duration / 1000).toFixed(0);
+                const peakText = climb.force === 'Manual' ? 'Manual' : `${climb.force} m/s² peak`;
 
                 item.innerHTML = `
                     <div class="climb-header">
@@ -1085,7 +1211,7 @@
                     </div>
                     <div class="climb-stats">
                         <div class="climb-stat"><strong>${durationSec}s</strong> time</div>
-                        <div class="climb-stat"><strong>${climb.force}</strong> m/s² peak</div>
+                        <div class="climb-stat"><strong>${peakText}</strong></div>
                         <div class="climb-stat"><strong>V${climb.grade}</strong> grade</div>
                     </div>
                 `;
@@ -1107,6 +1233,7 @@
 
         window.addEventListener('beforeunload', releaseWakeLock);
 
+        setDetectionMode('auto');
         applySettings();
     </script>
 
