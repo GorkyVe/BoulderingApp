@@ -23,7 +23,7 @@
         }
 
         .container {
-            max-width: 600px;
+            max-width: 640px;
             margin: 0 auto;
         }
 
@@ -47,12 +47,18 @@
         }
 
         .card {
-            background: rgba(30, 41, 59, 0.5);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.4);
             border-radius: 1rem;
             padding: 1.5rem;
             margin-bottom: 1.5rem;
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.3);
+        }
+
+        .card.highlight {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(145deg, rgba(76, 29, 149, 0.85), rgba(30, 41, 59, 0.85));
         }
 
         .text-input {
@@ -220,6 +226,25 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 0.5rem;
+        }
+
+        .chip-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin: 0.5rem 0 0;
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 0.4rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.875rem;
+            color: #e5e7eb;
         }
 
         .btn-success {
@@ -419,7 +444,12 @@
                 <span>📊</span>
                 Boulder Tracker
             </h1>
-            <p>Auto-detect climbs & track progress</p>
+            <p>Dial in beta, track motion, and log every send.</p>
+            <div class="chip-row">
+                <div class="chip">⚡ Auto & manual recording</div>
+                <div class="chip">🕒 Queue climbs for grading</div>
+                <div class="chip">📱 Mobile-ready layout</div>
+            </div>
         </div>
 
         <div id="permissionError" class="alert alert-error hidden">
@@ -433,9 +463,10 @@
         <div class="card highlight">
             <div class="section-title">
                 <span>🎯</span>
-                Start Tracking
+                Get ready to climb
                 <button class="action-link" onclick="openSettings()">Detection Settings</button>
             </div>
+            <p style="color: #e2e8f0; line-height: 1.4; margin-bottom: 1rem;">Keep this page open, hit Start Tracking, then jump into your next climb. We'll keep the screen awake and queue every attempt so you can grade later.</p>
             <div class="mode-toggle">
                 <button id="autoModeBtn" class="mode-option active" onclick="setDetectionMode('auto')">Automatic detection</button>
                 <button id="manualModeBtn" class="mode-option" onclick="setDetectionMode('manual')">Manual start / stop</button>
@@ -471,6 +502,18 @@
                 <canvas id="accelGraph" width="300" height="100"></canvas>
             </div>
             <div id="graphNote" class="graph-note"></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <span>🚀</span>
+                Session checklist
+            </div>
+            <ul style="color: #e5e7eb; line-height: 1.6; margin-left: 1rem;">
+                <li>Allow motion access if prompted so we can capture acceleration data.</li>
+                <li>Use <strong>Automatic</strong> for hands-free detection or <strong>Manual</strong> to mark takeoff/landing yourself.</li>
+                <li>Every climb—auto or manual—lands in your queue for grading as Flash or Top.</li>
+            </ul>
         </div>
 
         <div id="pendingQueue" class="card hidden">
@@ -647,6 +690,8 @@
         let wakeLock = null;
         let detectionMode = 'auto';
         let manualClimbStart = null;
+        let manualMotionData = [];
+        let manualPeakForce = 0;
 
         // Thresholds
         let REST_THRESHOLD = 5;
@@ -780,7 +825,7 @@
 
         async function startTracking() {
             if (detectionMode === 'manual') {
-                beginManualTracking();
+                await beginManualTracking();
                 return;
             }
 
@@ -806,20 +851,26 @@
             window.addEventListener('devicemotion', handleMotion);
         }
 
-        function beginManualTracking() {
+        async function beginManualTracking() {
+            await requestMotionPermission();
+            await requestWakeLock();
             isTracking = true;
             climbState = 'resting';
             manualClimbStart = null;
+            manualMotionData = [];
+            manualPeakForce = 0;
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             manualControls.classList.remove('hidden');
             liveMonitor.classList.add('hidden');
             updateGraphNote();
+            window.addEventListener('devicemotion', handleManualMotion);
         }
 
         function stopTracking() {
             isTracking = false;
             window.removeEventListener('devicemotion', handleMotion);
+            window.removeEventListener('devicemotion', handleManualMotion);
             startBtn.classList.remove('hidden');
             stopBtn.classList.add('hidden');
             liveMonitor.classList.add('hidden');
@@ -828,6 +879,7 @@
             climbState = 'resting';
             restPrimeStart = null;
             manualClimbStart = null;
+            manualMotionData = [];
             releaseWakeLock();
         }
 
@@ -849,16 +901,32 @@
                 id: Date.now(),
                 timestamp: new Date(),
                 duration: duration,
-                peakForce: 'Manual',
-                motionData: [],
+                peakForce: manualMotionData.length ? manualPeakForce.toFixed(1) : 'Manual',
+                motionData: [...manualMotionData],
                 manual: true
             };
 
             pendingClimbs.push(climb);
             manualClimbStart = null;
+            manualMotionData = [];
+            manualPeakForce = 0;
             climbState = 'resting';
             updatePendingQueue();
             updateStatusUI('resting');
+        }
+
+        function handleManualMotion(event) {
+            if (!manualClimbStart) return;
+            const acc = event.acceleration || event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const x = acc.x || 0;
+            const y = acc.y || 0;
+            const z = acc.z || 0;
+
+            const totalAccel = Math.sqrt(x * x + y * y + z * z);
+            manualMotionData.push(totalAccel);
+            manualPeakForce = Math.max(manualPeakForce, totalAccel);
         }
 
         function handleMotion(event) {
@@ -983,7 +1051,8 @@
                 timestamp: new Date(),
                 duration: duration,
                 peakForce: peakClimbForce.toFixed(1),
-                motionData: [...climbMotionData]
+                motionData: [...climbMotionData],
+                manual: false
             };
 
             pendingClimbs.push(climb);
@@ -1011,6 +1080,7 @@
 
                 const durationSec = (climb.duration / 1000).toFixed(0);
                 const peakDisplay = climb.peakForce === 'Manual' ? 'Manual entry' : `${climb.peakForce} m/s²`;
+                const typeLabel = climb.manual ? 'Manual' : 'Auto';
                 const info = document.createElement('div');
                 const title = document.createElement('div');
                 title.style.fontWeight = '600';
@@ -1019,7 +1089,7 @@
                 const meta = document.createElement('div');
                 meta.style.fontSize = '0.875rem';
                 meta.style.color = '#9ca3af';
-                meta.textContent = `${durationSec}s · Peak: ${peakDisplay}`;
+                meta.textContent = `${durationSec}s · Peak: ${peakDisplay} · ${typeLabel}`;
 
                 const miniGraph = document.createElement('canvas');
                 miniGraph.width = 140;
