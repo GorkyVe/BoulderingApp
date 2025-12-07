@@ -534,9 +534,31 @@
                 <label class="form-label">Minimum climb duration (minutes)</label>
                 <input id="minDurationInput" type="number" step="0.05" min="0" class="text-input" value="0.1">
             </div>
+            <div class="form-group">
+                <label class="form-label">Guided calibration</label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn btn-secondary" onclick="openCalibration()">Run calibration</button>
+                    <div id="calibrationSummary" class="graph-note" style="margin: 0;">Use three sample climbs to tune thresholds.</div>
+                </div>
+            </div>
             <div class="btn-grid">
                 <button class="btn btn-success" onclick="applySettings()">Save settings</button>
                 <button class="btn btn-cancel" onclick="closeSettings()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="calibrationModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-title">Guided Calibration</div>
+            <p class="graph-note" style="margin-bottom: 1rem;">We'll capture three climbs to recommend rest and landing thresholds.</p>
+            <div id="calibrationStepsList" class="climb-list" style="gap: 0.75rem;"></div>
+            <div class="graph-note" id="calibrationStatus" style="margin-top: 0.5rem;"></div>
+            <div id="calibrationResults" class="graph-note" style="margin-top: 0.5rem;"></div>
+            <div class="btn-grid" style="margin-top: 1rem;">
+                <button id="startCalibrationBtn" class="btn btn-start" onclick="startCalibrationGuide()">Start calibration</button>
+                <button id="stepActionBtn" class="btn btn-secondary" onclick="toggleCalibrationStep()" disabled>Record climb</button>
+                <button class="btn btn-cancel" onclick="closeCalibration()">Close</button>
             </div>
         </div>
     </div>
@@ -648,7 +670,7 @@
         const climbCanvas = document.getElementById('climbGraph');
         const climbCtx = climbCanvas.getContext('2d');
 
-        function applySettings() {
+        function syncThresholdsFromInputs() {
             REST_THRESHOLD = Number(document.getElementById('restThresholdInput').value) || REST_THRESHOLD;
             MOVEMENT_THRESHOLD = Number(document.getElementById('movementThresholdInput').value) || MOVEMENT_THRESHOLD;
             LANDING_THRESHOLD = Number(document.getElementById('landingThresholdInput').value) || LANDING_THRESHOLD;
@@ -664,6 +686,10 @@
             }
 
             updateGraphNote();
+        }
+
+        function applySettings() {
+            syncThresholdsFromInputs();
             closeSettings();
         }
 
@@ -728,31 +754,40 @@
             }
         }
 
+        async function requestMotionPermission() {
+            if (typeof DeviceMotionEvent === 'undefined') {
+                document.getElementById('unsupportedError').classList.remove('hidden');
+                return false;
+            }
+
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const response = await DeviceMotionEvent.requestPermission();
+                    if (response === 'granted') {
+                        return true;
+                    }
+                    document.getElementById('permissionError').classList.remove('hidden');
+                    return false;
+                } catch (error) {
+                    console.error('Permission error:', error);
+                    document.getElementById('permissionError').classList.remove('hidden');
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         async function startTracking() {
             if (detectionMode === 'manual') {
                 beginManualTracking();
                 return;
             }
 
-            if (typeof DeviceMotionEvent !== 'undefined') {
-                if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                    try {
-                        const response = await DeviceMotionEvent.requestPermission();
-                        if (response === 'granted') {
-                            await beginAutoTracking();
-                        } else {
-                            document.getElementById('permissionError').classList.remove('hidden');
-                        }
-                    } catch (error) {
-                        console.error('Permission error:', error);
-                        document.getElementById('permissionError').classList.remove('hidden');
-                    }
-                } else {
-                    await beginAutoTracking();
-                }
-            } else {
-                document.getElementById('unsupportedError').classList.remove('hidden');
-            }
+            const permissionGranted = await requestMotionPermission();
+            if (!permissionGranted) return;
+
+            await beginAutoTracking();
         }
 
         async function beginAutoTracking() {
@@ -1232,6 +1267,225 @@
         });
 
         window.addEventListener('beforeunload', releaseWakeLock);
+
+        // Calibration
+        const calibrationSteps = [
+            {
+                id: 'slow-soft',
+                title: 'Slow up, slow down',
+                description: 'Climb gently and step down softly to capture relaxed motion.'
+            },
+            {
+                id: 'hard-soft',
+                title: 'Hard up, slow down',
+                description: 'Explode upward, then control your landing.'
+            },
+            {
+                id: 'hard-hard',
+                title: 'Hard up, hard down',
+                description: 'Powerful pull and firmer jump down to log a strong landing.'
+            }
+        ];
+
+        let calibrationIndex = 0;
+        let calibrationActive = false;
+        let calibrationRecording = false;
+        let calibrationSamples = [];
+        let calibrationResultsData = [];
+
+        const calibrationModal = document.getElementById('calibrationModal');
+        const calibrationStatus = document.getElementById('calibrationStatus');
+        const calibrationResults = document.getElementById('calibrationResults');
+        const calibrationStepsList = document.getElementById('calibrationStepsList');
+        const startCalibrationBtn = document.getElementById('startCalibrationBtn');
+        const stepActionBtn = document.getElementById('stepActionBtn');
+        const calibrationSummary = document.getElementById('calibrationSummary');
+
+        function openCalibration() {
+            if (isTracking) {
+                stopTracking();
+            }
+
+            calibrationModal.classList.remove('hidden');
+            resetCalibrationState();
+        }
+
+        function closeCalibration() {
+            calibrationModal.classList.add('hidden');
+            stopCalibrationCapture();
+        }
+
+        function resetCalibrationState() {
+            calibrationIndex = 0;
+            calibrationActive = false;
+            calibrationRecording = false;
+            calibrationSamples = [];
+            calibrationResultsData = [];
+            calibrationStatus.textContent = 'Press start to begin capturing climbs.';
+            calibrationResults.textContent = '';
+            startCalibrationBtn.disabled = false;
+            stepActionBtn.disabled = true;
+            stepActionBtn.textContent = 'Record climb';
+            renderCalibrationSteps();
+        }
+
+        function renderCalibrationSteps() {
+            calibrationStepsList.innerHTML = '';
+
+            calibrationSteps.forEach((step, index) => {
+                const item = document.createElement('div');
+                item.className = 'climb-item';
+                item.style.padding = '0.75rem';
+
+                const status = document.createElement('div');
+                status.className = 'climb-header';
+
+                const left = document.createElement('div');
+                left.className = 'climb-left';
+                const icon = document.createElement('div');
+                icon.className = 'climb-icon';
+                icon.textContent = index === calibrationIndex && calibrationRecording ? '⏺️' : '🎯';
+                const metaWrap = document.createElement('div');
+                const title = document.createElement('div');
+                title.className = 'climb-grade';
+                title.textContent = step.title;
+                const desc = document.createElement('div');
+                desc.className = 'climb-time';
+                desc.textContent = step.description;
+                metaWrap.appendChild(title);
+                metaWrap.appendChild(desc);
+                left.appendChild(icon);
+                left.appendChild(metaWrap);
+
+                const badge = document.createElement('div');
+                badge.className = 'climb-grade';
+                if (calibrationResultsData[index]) {
+                    badge.textContent = `${calibrationResultsData[index].peak.toFixed(1)} m/s²`;
+                } else if (index === calibrationIndex && calibrationActive) {
+                    badge.textContent = calibrationRecording ? 'Recording...' : 'Ready';
+                } else {
+                    badge.textContent = 'Pending';
+                }
+
+                status.appendChild(left);
+                status.appendChild(badge);
+                item.appendChild(status);
+                calibrationStepsList.appendChild(item);
+            });
+        }
+
+        function stopCalibrationCapture() {
+            calibrationRecording = false;
+            calibrationActive = false;
+            window.removeEventListener('devicemotion', handleCalibrationMotion);
+        }
+
+        async function startCalibrationGuide() {
+            const permissionGranted = await requestMotionPermission();
+            if (!permissionGranted) return;
+
+            calibrationActive = true;
+            calibrationIndex = 0;
+            calibrationResultsData = [];
+            calibrationStatus.textContent = 'Follow each step and tap "Record climb" before you move.';
+            startCalibrationBtn.disabled = true;
+            stepActionBtn.disabled = false;
+            stepActionBtn.textContent = 'Record climb';
+            calibrationSummary.textContent = 'Calibrating... perform each climb when prompted.';
+            window.addEventListener('devicemotion', handleCalibrationMotion);
+            renderCalibrationSteps();
+        }
+
+        function handleCalibrationMotion(event) {
+            if (!calibrationRecording) return;
+            const acc = event.acceleration || event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const totalAccel = Math.sqrt((acc.x || 0) ** 2 + (acc.y || 0) ** 2 + (acc.z || 0) ** 2);
+            calibrationSamples.push(totalAccel);
+        }
+
+        function toggleCalibrationStep() {
+            if (!calibrationActive) return;
+
+            if (!calibrationRecording) {
+                calibrationSamples = [];
+                calibrationRecording = true;
+                calibrationStatus.textContent = `Recording: ${calibrationSteps[calibrationIndex].title}. Perform the climb, then tap again to finish.`;
+                stepActionBtn.textContent = 'Finish step';
+            } else {
+                calibrationRecording = false;
+                stepActionBtn.textContent = 'Record climb';
+                processCalibrationStep();
+            }
+
+            renderCalibrationSteps();
+        }
+
+        function processCalibrationStep() {
+            if (calibrationSamples.length === 0) {
+                calibrationStatus.textContent = 'No motion detected. Please retry this step.';
+                return;
+            }
+
+            const peak = Math.max(...calibrationSamples);
+            const average = calibrationSamples.reduce((a, b) => a + b, 0) / calibrationSamples.length;
+            calibrationResultsData[calibrationIndex] = { peak, average };
+            calibrationStatus.textContent = `${calibrationSteps[calibrationIndex].title} captured. Peak ${peak.toFixed(1)} m/s².`;
+
+            calibrationIndex += 1;
+            if (calibrationIndex >= calibrationSteps.length) {
+                finishCalibration();
+                return;
+            }
+
+            calibrationStatus.textContent += ' Start the next climb when ready.';
+            renderCalibrationSteps();
+        }
+
+        function finishCalibration() {
+            calibrationActive = false;
+            calibrationRecording = false;
+            stepActionBtn.disabled = true;
+            startCalibrationBtn.disabled = false;
+            window.removeEventListener('devicemotion', handleCalibrationMotion);
+
+            if (calibrationResultsData.length < calibrationSteps.length) {
+                calibrationStatus.textContent = 'Calibration incomplete. Capture all three climbs to generate recommendations.';
+                return;
+            }
+
+            const recommendations = generateCalibrationRecommendations();
+            const resultText = calibrationResultsData
+                .map((result, idx) => `${calibrationSteps[idx].title}: peak ${result.peak.toFixed(1)} m/s²`)
+                .join(' · ');
+
+            calibrationResults.textContent = resultText;
+            calibrationStatus.textContent = 'Recommendations applied to detection settings.';
+            calibrationSummary.textContent = `Rest ${recommendations.rest} | Movement ${recommendations.movement} | Landing ${recommendations.landing} m/s²`;
+            applyCalibrationRecommendations(recommendations);
+            renderCalibrationSteps();
+        }
+
+        function generateCalibrationRecommendations() {
+            const slowPeak = calibrationResultsData[0].peak;
+            const hardSlowPeak = calibrationResultsData[1].peak;
+            const hardHardPeak = calibrationResultsData[2].peak;
+
+            const rest = Number(Math.max(3, slowPeak * 0.35).toFixed(1));
+            const movement = Number((((slowPeak + hardSlowPeak) / 2) * 0.75).toFixed(1));
+            const landing = Number((Math.max(hardSlowPeak, hardHardPeak) * 0.85).toFixed(1));
+
+            return { rest, movement, landing };
+        }
+
+        function applyCalibrationRecommendations(recommendations) {
+            document.getElementById('restThresholdInput').value = recommendations.rest;
+            document.getElementById('movementThresholdInput').value = recommendations.movement;
+            document.getElementById('landingThresholdInput').value = recommendations.landing;
+
+            syncThresholdsFromInputs();
+        }
 
         setDetectionMode('auto');
         applySettings();
