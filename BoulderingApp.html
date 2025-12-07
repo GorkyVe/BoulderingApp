@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Boulder Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #7e22ce 50%, #1e293b 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 1rem;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .header p {
+            color: #d1d5db;
+        }
+        
+        .card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1.125rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-start {
+            background: #16a34a;
+            color: white;
+        }
+        
+        .btn-start:hover {
+            background: #15803d;
+        }
+        
+        .btn-stop {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .btn-stop:hover {
+            background: #b91c1c;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-error {
+            background: rgba(220, 38, 38, 0.3);
+            border: 1px solid #dc2626;
+        }
+        
+        .alert-warning {
+            background: rgba(234, 179, 8, 0.3);
+            border: 1px solid #eab308;
+        }
+        
+        .metric {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #10b981;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            color: #9ca3af;
+        }
+        
+        .graph-container {
+            display: flex;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+        
+        .graph-note {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+        
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            z-index: 50;
+        }
+        
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .modal-force {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #fbbf24;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        
+        .btn-success {
+            background: #9333ea;
+            color: white;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-success:hover {
+            background: #7e22ce;
+        }
+        
+        .btn-success.blue {
+            background: #2563eb;
+        }
+        
+        .btn-success.blue:hover {
+            background: #1d4ed8;
+        }
+        
+        .grade-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .grade-option {
+            position: relative;
+        }
+        
+        .grade-input {
+            position: absolute;
+            opacity: 0;
+        }
+        
+        .grade-label {
+            display: block;
+            background: #475569;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .grade-input:checked + .grade-label {
+            background: #16a34a;
+        }
+        
+        .grade-label:hover {
+            background: #334155;
+        }
+        
+        .btn-cancel {
+            background: #4b5563;
+            color: white;
+            margin-top: 0.5rem;
+        }
+        
+        .btn-cancel:hover {
+            background: #374151;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-value.blue { color: #3b82f6; }
+        .stat-value.purple { color: #a855f7; }
+        .stat-value.green { color: #10b981; }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: #9ca3af;
+        }
+        
+        .climb-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        
+        .climb-item {
+            background: rgba(71, 85, 105, 0.5);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .climb-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .climb-icon {
+            font-size: 1.5rem;
+        }
+        
+        .climb-grade {
+            font-weight: 600;
+        }
+        
+        .climb-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+        
+        .climb-force {
+            font-weight: bold;
+            color: #fbbf24;
+        }
+        
+        .climb-force-label {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <span>📊</span>
+                Boulder Tracker
+            </h1>
+            <p>Detect landings & log your climbs</p>
+        </div>
+
+        <div id="permissionError" class="alert alert-error hidden">
+            <p>Motion sensor access denied. Please enable in your browser settings.</p>
+        </div>
+
+        <div id="unsupportedError" class="alert alert-warning hidden">
+            <p>Motion sensors not supported on this device.</p>
+        </div>
+
+        <div class="card">
+            <button id="startBtn" class="btn btn-start">Start Tracking</button>
+            <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
+        </div>
+
+        <div id="liveMonitor" class="card hidden">
+            <div class="section-title">
+                <span>📈</span>
+                Live Motion
+            </div>
+            <div class="metric">
+                <div id="currentAccel" class="metric-value">0.0 m/s²</div>
+                <div class="metric-label">Current acceleration</div>
+            </div>
+            <div class="graph-container">
+                <canvas id="accelGraph" width="300" height="80"></canvas>
+            </div>
+            <div class="graph-note">
+                Red line = landing threshold (20 m/s²)
+            </div>
+        </div>
+
+        <div id="statsCard" class="card hidden">
+            <div class="section-title">
+                <span>📊</span>
+                Session Stats
+            </div>
+            <div class="stats-grid">
+                <div>
+                    <div id="totalClimbs" class="stat-value blue">0</div>
+                    <div class="stat-label">Total</div>
+                </div>
+                <div>
+                    <div id="flashCount" class="stat-value purple">0</div>
+                    <div class="stat-label">Flashes</div>
+                </div>
+                <div>
+                    <div id="topCount" class="stat-value green">0</div>
+                    <div class="stat-label">Tops</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="historyCard" class="card hidden">
+            <div class="section-title">
+                <span>🏆</span>
+                Climb History
+            </div>
+            <div id="climbList" class="climb-list"></div>
+        </div>
+    </div>
+
+    <div id="logModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-title">Landing Detected! 🎯</div>
+            <div class="metric">
+                <div id="peakForce" class="modal-force">0.0 m/s²</div>
+                <div class="metric-label">Impact force</div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Success Type</label>
+                <div class="btn-grid">
+                    <button class="btn-success" onclick="logClimb('flash')">⚡ Flash</button>
+                    <button class="btn-success blue" onclick="logClimb('top')">🏔️ Top</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Grade</label>
+                <div class="grade-grid">
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="3" id="grade3" class="grade-input">
+                        <label for="grade3" class="grade-label">3</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="4" id="grade4" class="grade-input">
+                        <label for="grade4" class="grade-label">4</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="5" id="grade5" class="grade-input">
+                        <label for="grade5" class="grade-label">5</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="6a" id="grade6a" class="grade-input">
+                        <label for="grade6a" class="grade-label">6a</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="6b" id="grade6b" class="grade-input">
+                        <label for="grade6b" class="grade-label">6b</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="6c" id="grade6c" class="grade-input">
+                        <label for="grade6c" class="grade-label">6c</label>
+                    </div>
+                    <div class="grade-option">
+                        <input type="radio" name="grade" value="7a" id="grade7a" class="grade-input">
+                        <label for="grade7a" class="grade-label">7a</label>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-cancel" onclick="cancelLog()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        let isTracking = false;
+        let currentAccel = 0;
+        let peakForce = 0;
+        let accelHistory = [];
+        let climbs = [];
+        let cooldown = false;
+        
+        const THRESHOLD = 20;
+        const HISTORY_LENGTH = 50;
+        
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const liveMonitor = document.getElementById('liveMonitor');
+        const logModal = document.getElementById('logModal');
+        const canvas = document.getElementById('accelGraph');
+        const ctx = canvas.getContext('2d');
+        
+        async function startTracking() {
+            if (typeof DeviceMotionEvent !== 'undefined') {
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    try {
+                        const response = await DeviceMotionEvent.requestPermission();
+                        if (response === 'granted') {
+                            beginTracking();
+                        } else {
+                            document.getElementById('permissionError').classList.remove('hidden');
+                        }
+                    } catch (error) {
+                        console.error('Permission error:', error);
+                        document.getElementById('permissionError').classList.remove('hidden');
+                    }
+                } else {
+                    beginTracking();
+                }
+            } else {
+                document.getElementById('unsupportedError').classList.remove('hidden');
+            }
+        }
+        
+        function beginTracking() {
+            isTracking = true;
+            accelHistory = [];
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            liveMonitor.classList.remove('hidden');
+            
+            window.addEventListener('devicemotion', handleMotion);
+        }
+        
+        function stopTracking() {
+            isTracking = false;
+            window.removeEventListener('devicemotion', handleMotion);
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+            liveMonitor.classList.add('hidden');
+            currentAccel = 0;
+        }
+        
+        function handleMotion(event) {
+            const acc = event.acceleration || event.accelerationIncludingGravity;
+            if (!acc) return;
+            
+            const x = acc.x || 0;
+            const y = acc.y || 0;
+            const z = acc.z || 0;
+            
+            const totalAccel = Math.sqrt(x * x + y * y + z * z);
+            currentAccel = totalAccel;
+            
+            document.getElementById('currentAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
+            
+            accelHistory.push(totalAccel);
+            if (accelHistory.length > HISTORY_LENGTH) {
+                accelHistory.shift();
+            }
+            
+            drawGraph();
+            
+            if (totalAccel > THRESHOLD && !cooldown && logModal.classList.contains('hidden')) {
+                cooldown = true;
+                peakForce = totalAccel;
+                showLogModal();
+                
+                setTimeout(() => {
+                    cooldown = false;
+                }, 3000);
+            }
+        }
+        
+        function drawGraph() {
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const maxVal = Math.max(...accelHistory, THRESHOLD);
+            const thresholdY = canvas.height - (THRESHOLD / maxVal) * canvas.height;
+            
+            ctx.strokeStyle = '#ef4444';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, thresholdY);
+            ctx.lineTo(canvas.width, thresholdY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            if (accelHistory.length > 1) {
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                accelHistory.forEach((val, i) => {
+                    const x = (i / HISTORY_LENGTH) * canvas.width;
+                    const y = canvas.height - (val / maxVal) * canvas.height;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                });
+                
+                ctx.stroke();
+            }
+        }
+        
+        function showLogModal() {
+            document.getElementById('peakForce').textContent = peakForce.toFixed(1) + ' m/s²';
+            logModal.classList.remove('hidden');
+        }
+        
+        function logClimb(success) {
+            const gradeInput = document.querySelector('input[name="grade"]:checked');
+            if (!gradeInput) {
+                alert('Please select a grade');
+                return;
+            }
+            
+            const climb = {
+                id: Date.now(),
+                timestamp: new Date(),
+                success: success,
+                grade: gradeInput.value,
+                force: peakForce.toFixed(1)
+            };
+            
+            climbs.unshift(climb);
+            updateUI();
+            cancelLog();
+        }
+        
+        function cancelLog() {
+            logModal.classList.add('hidden');
+            const gradeInputs = document.querySelectorAll('input[name="grade"]');
+            gradeInputs.forEach(input => input.checked = false);
+        }
+        
+        function updateUI() {
+            const total = climbs.length;
+            const flashes = climbs.filter(c => c.success === 'flash').length;
+            const tops = climbs.filter(c => c.success === 'top').length;
+            
+            document.getElementById('totalClimbs').textContent = total;
+            document.getElementById('flashCount').textContent = flashes;
+            document.getElementById('topCount').textContent = tops;
+            
+            if (total > 0) {
+                document.getElementById('statsCard').classList.remove('hidden');
+                document.getElementById('historyCard').classList.remove('hidden');
+            }
+            
+            const climbList = document.getElementById('climbList');
+            climbList.innerHTML = '';
+            
+            climbs.forEach(climb => {
+                const item = document.createElement('div');
+                item.className = 'climb-item';
+                
+                const icon = climb.success === 'flash' ? '⚡' : '🏔️';
+                const time = climb.timestamp.toLocaleTimeString();
+                
+                item.innerHTML = `
+                    <div class="climb-left">
+                        <div class="climb-icon">${icon}</div>
+                        <div>
+                            <div class="climb-grade">Grade ${climb.grade}</div>
+                            <div class="climb-time">${time}</div>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="climb-force">${climb.force} m/s²</div>
+                        <div class="climb-force-label">impact</div>
+                    </div>
+                `;
+                
+                climbList.appendChild(item);
+            });
+        }
+        
+        startBtn.addEventListener('click', startTracking);
+        stopBtn.addEventListener('click', stopTracking);
+    </script>
+</body>
+</html>
