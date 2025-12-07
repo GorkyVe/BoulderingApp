@@ -323,6 +323,58 @@
         .hidden {
             display: none;
         }
+        
+        .tracking-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        
+        .tracking-status {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .tracking-label {
+            font-size: 0.875rem;
+            color: #9ca3af;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tracking-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #10b981;
+            margin-bottom: 1rem;
+        }
+        
+        .tracking-time {
+            font-size: 1.25rem;
+            color: #6b7280;
+        }
+        
+        .btn-stop-tracking {
+            background: #dc2626;
+            color: white;
+            padding: 1.5rem 3rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-stop-tracking:active {
+            background: #b91c1c;
+            transform: scale(0.95);
+        }
     </style>
 </head>
 <body>
@@ -395,6 +447,15 @@
         </div>
     </div>
 
+    <div id="trackingOverlay" class="tracking-overlay hidden">
+        <div class="tracking-status">
+            <div class="tracking-label">CURRENT FORCE</div>
+            <div id="trackingAccel" class="tracking-value">0.0 m/s²</div>
+            <div id="trackingTime" class="tracking-time">00:00</div>
+        </div>
+        <button id="stopTrackingBtn" class="btn-stop-tracking">STOP TRACKING</button>
+    </div>
+
     <div id="logModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-title">Landing Detected! 🎯</div>
@@ -456,6 +517,9 @@
         let accelHistory = [];
         let climbs = [];
         let cooldown = false;
+        let wakeLock = null;
+        let startTime = null;
+        let timerInterval = null;
         
         const THRESHOLD = 20;
         const HISTORY_LENGTH = 50;
@@ -464,6 +528,8 @@
         const stopBtn = document.getElementById('stopBtn');
         const liveMonitor = document.getElementById('liveMonitor');
         const logModal = document.getElementById('logModal');
+        const trackingOverlay = document.getElementById('trackingOverlay');
+        const stopTrackingBtn = document.getElementById('stopTrackingBtn');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
         
@@ -473,7 +539,7 @@
                     try {
                         const response = await DeviceMotionEvent.requestPermission();
                         if (response === 'granted') {
-                            beginTracking();
+                            await beginTracking();
                         } else {
                             document.getElementById('permissionError').classList.remove('hidden');
                         }
@@ -482,29 +548,69 @@
                         document.getElementById('permissionError').classList.remove('hidden');
                     }
                 } else {
-                    beginTracking();
+                    await beginTracking();
                 }
             } else {
                 document.getElementById('unsupportedError').classList.remove('hidden');
             }
         }
         
-        function beginTracking() {
+        async function beginTracking() {
             isTracking = true;
             accelHistory = [];
-            startBtn.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
-            liveMonitor.classList.remove('hidden');
+            startTime = Date.now();
+            
+            // Request wake lock to keep screen on
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake lock activated');
+                }
+            } catch (err) {
+                console.log('Wake lock not supported or failed:', err);
+            }
+            
+            // Show tracking overlay (black screen)
+            trackingOverlay.classList.remove('hidden');
+            
+            // Start timer
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
             
             window.addEventListener('devicemotion', handleMotion);
+        }
+        
+        function updateTimer() {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('trackingTime').textContent = 
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
         }
         
         function stopTracking() {
             isTracking = false;
             window.removeEventListener('devicemotion', handleMotion);
-            startBtn.classList.remove('hidden');
-            stopBtn.classList.add('hidden');
-            liveMonitor.classList.add('hidden');
+            
+            // Release wake lock
+            if (wakeLock) {
+                wakeLock.release().then(() => {
+                    console.log('Wake lock released');
+                    wakeLock = null;
+                });
+            }
+            
+            // Stop timer
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            startTime = null;
+            
+            // Hide tracking overlay
+            trackingOverlay.classList.add('hidden');
+            
             currentAccel = 0;
         }
         
@@ -519,14 +625,13 @@
             const totalAccel = Math.sqrt(x * x + y * y + z * z);
             currentAccel = totalAccel;
             
-            document.getElementById('currentAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
+            // Update tracking overlay
+            document.getElementById('trackingAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
             
             accelHistory.push(totalAccel);
             if (accelHistory.length > HISTORY_LENGTH) {
                 accelHistory.shift();
             }
-            
-            drawGraph();
             
             if (totalAccel > THRESHOLD && !cooldown && logModal.classList.contains('hidden')) {
                 cooldown = true;
@@ -577,6 +682,7 @@
         function showLogModal() {
             document.getElementById('peakForce').textContent = peakForce.toFixed(1) + ' m/s²';
             logModal.classList.remove('hidden');
+            // Keep tracking overlay visible behind modal
         }
         
         function logClimb(success) {
@@ -649,6 +755,21 @@
         
         startBtn.addEventListener('click', startTracking);
         stopBtn.addEventListener('click', stopTracking);
+        stopTrackingBtn.addEventListener('click', stopTracking);
+        
+        // Re-acquire wake lock if page becomes visible again
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && isTracking && !wakeLock) {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log('Wake lock re-acquired');
+                    }
+                } catch (err) {
+                    console.log('Failed to re-acquire wake lock:', err);
+                }
+            }
+        });
     </script>
 </body>
 </html>
