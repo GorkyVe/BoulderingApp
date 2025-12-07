@@ -55,6 +55,16 @@
             margin-bottom: 1.5rem;
         }
 
+        .text-input {
+            width: 100%;
+            padding: 0.75rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.6);
+            color: white;
+            font-size: 1rem;
+        }
+
         .btn {
             width: 100%;
             padding: 1rem 1.5rem;
@@ -421,6 +431,34 @@
         </div>
 
         <div class="card">
+            <div class="section-title">
+                <span>⚙️</span>
+                Detection Settings
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rest threshold (m/s²)</label>
+                <input id="restThresholdInput" type="number" step="0.1" min="0" class="text-input" value="5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Movement threshold (m/s²)</label>
+                <input id="movementThresholdInput" type="number" step="0.1" min="0" class="text-input" value="6">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Landing threshold (m/s²)</label>
+                <input id="landingThresholdInput" type="number" step="0.1" min="0" class="text-input" value="20">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Prime/finish rest duration (ms)</label>
+                <input id="restDurationInput" type="number" step="100" min="0" class="text-input" value="2000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Minimum climb duration (ms)</label>
+                <input id="minDurationInput" type="number" step="100" min="0" class="text-input" value="3000">
+            </div>
+            <button class="btn btn-success" onclick="applySettings()">Update thresholds</button>
+        </div>
+
+        <div class="card">
             <button id="startBtn" class="btn btn-start">Start Tracking</button>
             <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
         </div>
@@ -441,9 +479,7 @@
             <div class="graph-container">
                 <canvas id="accelGraph" width="300" height="100"></canvas>
             </div>
-            <div class="graph-note">
-                Blue = rest threshold (5 m/s²) | Red = landing threshold (20 m/s²)
-            </div>
+            <div id="graphNote" class="graph-note"></div>
         </div>
 
         <div id="pendingQueue" class="card hidden">
@@ -564,12 +600,15 @@
         let climbMotionData = [];
         let restStartTime = null;
         let peakClimbForce = 0;
+        let restPrimeStart = null;
+        let wakeLock = null;
 
         // Thresholds
-        const REST_THRESHOLD = 5;
-        const LANDING_THRESHOLD = 20;
-        const REST_DURATION = 2000; // 2 seconds of rest to complete climb
-        const MIN_CLIMB_DURATION = 3000; // 3 seconds minimum climb
+        let REST_THRESHOLD = 5;
+        let MOVEMENT_THRESHOLD = 6;
+        let LANDING_THRESHOLD = 20;
+        let REST_DURATION = 2000; // 2 seconds of rest to complete climb
+        let MIN_CLIMB_DURATION = 3000; // 3 seconds minimum climb
         const HISTORY_LENGTH = 50;
 
         const startBtn = document.getElementById('startBtn');
@@ -581,13 +620,48 @@
         const climbCanvas = document.getElementById('climbGraph');
         const climbCtx = climbCanvas.getContext('2d');
 
+        function applySettings() {
+            REST_THRESHOLD = Number(document.getElementById('restThresholdInput').value) || REST_THRESHOLD;
+            MOVEMENT_THRESHOLD = Number(document.getElementById('movementThresholdInput').value) || MOVEMENT_THRESHOLD;
+            LANDING_THRESHOLD = Number(document.getElementById('landingThresholdInput').value) || LANDING_THRESHOLD;
+            REST_DURATION = Number(document.getElementById('restDurationInput').value) || REST_DURATION;
+            MIN_CLIMB_DURATION = Number(document.getElementById('minDurationInput').value) || MIN_CLIMB_DURATION;
+
+            updateGraphNote();
+        }
+
+        function updateGraphNote() {
+            const note = document.getElementById('graphNote');
+            note.textContent = `Blue = rest threshold (${REST_THRESHOLD} m/s²) | Red = landing threshold (${LANDING_THRESHOLD} m/s²)`;
+        }
+
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                });
+            } catch (err) {
+                console.warn('Wake lock not available', err);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
         async function startTracking() {
             if (typeof DeviceMotionEvent !== 'undefined') {
                 if (typeof DeviceMotionEvent.requestPermission === 'function') {
                     try {
                         const response = await DeviceMotionEvent.requestPermission();
                         if (response === 'granted') {
-                            beginTracking();
+                            await beginTracking();
                         } else {
                             document.getElementById('permissionError').classList.remove('hidden');
                         }
@@ -596,20 +670,23 @@
                         document.getElementById('permissionError').classList.remove('hidden');
                     }
                 } else {
-                    beginTracking();
+                    await beginTracking();
                 }
             } else {
                 document.getElementById('unsupportedError').classList.remove('hidden');
             }
         }
 
-        function beginTracking() {
+        async function beginTracking() {
             isTracking = true;
             accelHistory = [];
             climbState = 'resting';
+            restPrimeStart = null;
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             liveMonitor.classList.remove('hidden');
+
+            await requestWakeLock();
 
             window.addEventListener('devicemotion', handleMotion);
         }
@@ -622,6 +699,8 @@
             liveMonitor.classList.add('hidden');
             currentAccel = 0;
             climbState = 'resting';
+            restPrimeStart = null;
+            releaseWakeLock();
         }
 
         function handleMotion(event) {
@@ -646,20 +725,33 @@
             updateClimbState(totalAccel);
         }
 
+        function startClimb(now, accel) {
+            climbState = 'climbing';
+            climbStartTime = now;
+            climbMotionData = [accel];
+            peakClimbForce = accel;
+            restStartTime = null;
+            restPrimeStart = null;
+            updateStatusUI('climbing');
+        }
+
         function updateClimbState(accel) {
             const now = Date.now();
-            
+
             if (climbState === 'resting') {
-                if (accel > REST_THRESHOLD) {
-                    // Start climbing
-                    climbState = 'climbing';
-                    climbStartTime = now;
-                    climbMotionData = [accel];
-                    peakClimbForce = accel;
-                    restStartTime = null;
-                    updateStatusUI('climbing');
+                if (accel <= REST_THRESHOLD) {
+                    if (!restPrimeStart) {
+                        restPrimeStart = now;
+                    }
                 }
-            } 
+
+                const restedLongEnough = restPrimeStart && (now - restPrimeStart >= REST_DURATION);
+                if (restedLongEnough && accel > MOVEMENT_THRESHOLD) {
+                    startClimb(now, accel);
+                } else if (accel > MOVEMENT_THRESHOLD && !restedLongEnough) {
+                    restPrimeStart = null;
+                }
+            }
             else if (climbState === 'climbing') {
                 climbMotionData.push(accel);
                 peakClimbForce = Math.max(peakClimbForce, accel);
@@ -758,21 +850,72 @@
             pendingClimbs.forEach((climb, index) => {
                 const item = document.createElement('div');
                 item.className = 'queue-item';
-                
+
                 const durationSec = (climb.duration / 1000).toFixed(0);
-                
-                item.innerHTML = `
-                    <div>
-                        <div style="font-weight: 600;">Climb #${pendingClimbs.length - index}</div>
-                        <div style="font-size: 0.875rem; color: #9ca3af;">
-                            ${durationSec}s · Peak: ${climb.peakForce} m/s²
-                        </div>
-                    </div>
-                    <button class="btn-grade" onclick="gradeClimb(${index})">Grade Now</button>
-                `;
-                
+                const info = document.createElement('div');
+                const title = document.createElement('div');
+                title.style.fontWeight = '600';
+                title.textContent = `Climb #${pendingClimbs.length - index}`;
+
+                const meta = document.createElement('div');
+                meta.style.fontSize = '0.875rem';
+                meta.style.color = '#9ca3af';
+                meta.textContent = `${durationSec}s · Peak: ${climb.peakForce} m/s²`;
+
+                const miniGraph = document.createElement('canvas');
+                miniGraph.width = 140;
+                miniGraph.height = 50;
+                miniGraph.style.marginTop = '0.5rem';
+
+                info.appendChild(title);
+                info.appendChild(meta);
+                info.appendChild(miniGraph);
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.alignItems = 'center';
+                actions.style.gap = '0.5rem';
+
+                const gradeBtn = document.createElement('button');
+                gradeBtn.className = 'btn-grade';
+                gradeBtn.textContent = 'Grade Now';
+                gradeBtn.onclick = () => gradeClimb(index);
+
+                actions.appendChild(gradeBtn);
+
+                item.appendChild(info);
+                item.appendChild(actions);
+
                 queueList.appendChild(item);
+                drawPendingGraph(miniGraph, climb.motionData);
             });
+        }
+
+        function drawPendingGraph(canvasEl, data) {
+            const miniCtx = canvasEl.getContext('2d');
+            miniCtx.fillStyle = '#0f172a';
+            miniCtx.fillRect(0, 0, canvasEl.width, canvasEl.height);
+
+            if (data.length < 2) return;
+
+            const maxVal = Math.max(...data, 1);
+
+            miniCtx.strokeStyle = '#a855f7';
+            miniCtx.lineWidth = 2;
+            miniCtx.beginPath();
+
+            data.forEach((val, i) => {
+                const x = (i / data.length) * canvasEl.width;
+                const y = canvasEl.height - (val / maxVal) * canvasEl.height;
+
+                if (i === 0) {
+                    miniCtx.moveTo(x, y);
+                } else {
+                    miniCtx.lineTo(x, y);
+                }
+            });
+
+            miniCtx.stroke();
         }
 
         function gradeClimb(index) {
@@ -796,7 +939,7 @@
 
             if (data.length < 2) return;
 
-            const maxVal = Math.max(...data);
+            const maxVal = Math.max(...data, 1);
             
             climbCtx.strokeStyle = '#10b981';
             climbCtx.lineWidth = 2;
@@ -903,6 +1046,7 @@
             gradeInputs.forEach(input => input.checked = false);
         }
 
+
         function updateUI() {
             const total = climbs.length;
             const flashes = climbs.filter(c => c.success === 'flash').length;
@@ -925,5 +1069,47 @@
                 item.className = 'climb-item';
 
                 const icon = climb.success === 'flash' ? '⚡' : '🏔️';
-                const time = climb.timestamp.toLocaleTimeString();
+                const time = new Date(climb.timestamp).toLocaleTimeString();
                 const durationSec = (climb.duration / 1000).toFixed(0);
+
+                item.innerHTML = `
+                    <div class="climb-header">
+                        <div class="climb-left">
+                            <div class="climb-icon">${icon}</div>
+                            <div>
+                                <div class="climb-grade">V${climb.grade}</div>
+                                <div class="climb-time">${time}</div>
+                            </div>
+                        </div>
+                        <div class="climb-grade">${climb.success === 'flash' ? 'Flash' : 'Top'}</div>
+                    </div>
+                    <div class="climb-stats">
+                        <div class="climb-stat"><strong>${durationSec}s</strong> time</div>
+                        <div class="climb-stat"><strong>${climb.force}</strong> m/s² peak</div>
+                        <div class="climb-stat"><strong>V${climb.grade}</strong> grade</div>
+                    </div>
+                `;
+
+                climbList.appendChild(item);
+            });
+        }
+
+        startBtn.addEventListener('click', startTracking);
+        stopBtn.addEventListener('click', stopTracking);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && isTracking) {
+                requestWakeLock();
+            } else if (!isTracking) {
+                releaseWakeLock();
+            }
+        });
+
+        window.addEventListener('beforeunload', releaseWakeLock);
+
+        applySettings();
+    </script>
+
+</body>
+
+</html>
