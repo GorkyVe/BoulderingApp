@@ -310,6 +310,23 @@
             font-size: 0.75rem;
             color: #9ca3af;
         }
+
+        .flow-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .flow-step {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem;
+            align-items: start;
+        }
+
+        .flow-step strong {
+            color: #fbbf24;
+        }
         
         .section-title {
             font-size: 1.25rem;
@@ -381,7 +398,8 @@
                 <span>📊</span>
                 Boulder Tracker
             </h1>
-            <p>Detect landings & log your climbs</p>
+            <p>Start a session, watch the m/s² graph, and let the app catch every landing automatically.</p>
+            <p>It listens for low (rest), middle (climbing), and high (jump) m/s² so every attempt is saved to grade later.</p>
         </div>
 
         <div id="permissionError" class="alert alert-error hidden">
@@ -393,7 +411,7 @@
         </div>
 
         <div class="card">
-            <button id="startBtn" class="btn btn-start">Start Tracking</button>
+            <button id="startBtn" class="btn btn-start">Start Session</button>
             <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
         </div>
 
@@ -409,6 +427,32 @@
             <div class="tracking-actions">
                 <div class="pill">🎧 Keep phone steady while climbing</div>
                 <button id="stopTrackingBtn" class="btn btn-stop">Stop Tracking</button>
+            </div>
+        </div>
+
+        <div id="flowCard" class="card hidden">
+            <div class="section-title">
+                <span>🧭</span>
+                How this session works
+            </div>
+            <p>After you tap Start Session the live m/s² graph appears and the app auto-logs every climb:</p>
+            <div class="flow-list">
+                <div class="flow-step">
+                    <div>🟢</div>
+                    <div><strong>Resting (low m/s²):</strong> phone is still while you chalk up or plan.</div>
+                </div>
+                <div class="flow-step">
+                    <div>🟠</div>
+                    <div><strong>Climbing (mid m/s²):</strong> movement rises as you start and move on the wall.</div>
+                </div>
+                <div class="flow-step">
+                    <div>🔴</div>
+                    <div><strong>Landing (high m/s²):</strong> a spike marks the jump or drop, triggering an auto log.</div>
+                </div>
+                <div class="flow-step">
+                    <div>📓</div>
+                    <div><strong>Stored to grade:</strong> each landing is added to your log so you can pick flash or top later.</div>
+                </div>
             </div>
         </div>
 
@@ -533,6 +577,7 @@
         const liveMonitor = document.getElementById('liveMonitor');
         const logModal = document.getElementById('logModal');
         const trackingCard = document.getElementById('trackingCard');
+        const flowCard = document.getElementById('flowCard');
         const stopTrackingBtn = document.getElementById('stopTrackingBtn');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
@@ -569,6 +614,7 @@
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             trackingCard.classList.remove('hidden');
+            flowCard.classList.remove('hidden');
             liveMonitor.classList.remove('hidden');
 
             // Request wake lock to keep screen on
@@ -619,6 +665,8 @@
             startTime = null;
 
             trackingCard.classList.add('hidden');
+            flowCard.classList.add('hidden');
+            liveMonitor.classList.add('hidden');
 
             startBtn.classList.remove('hidden');
             stopBtn.classList.add('hidden');
