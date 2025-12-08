@@ -320,60 +320,57 @@
             gap: 0.5rem;
         }
         
-        .hidden {
-            display: none;
-        }
-        
-        .tracking-overlay {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
+        .tracking-card {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
             align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        
-        .tracking-status {
-            text-align: center;
-            margin-bottom: 3rem;
-        }
-        
-        .tracking-label {
-            font-size: 0.875rem;
-            color: #9ca3af;
-            margin-bottom: 0.5rem;
-        }
-        
-        .tracking-value {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #10b981;
             margin-bottom: 1rem;
         }
-        
-        .tracking-time {
-            font-size: 1.25rem;
-            color: #6b7280;
+
+        .tracking-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
         }
-        
-        .btn-stop-tracking {
-            background: #dc2626;
-            color: white;
-            padding: 1.5rem 3rem;
+
+        .tracking-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #9ca3af;
+        }
+
+        .tracking-value {
             font-size: 1.5rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 1rem;
-            cursor: pointer;
-            transition: all 0.3s;
+            font-weight: 800;
+            color: #10b981;
         }
-        
-        .btn-stop-tracking:active {
-            background: #b91c1c;
-            transform: scale(0.95);
+
+        .tracking-time {
+            font-size: 1rem;
+            color: #cbd5e1;
+        }
+
+        .tracking-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(148, 163, 184, 0.2);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            padding: 0.5rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
@@ -398,6 +395,21 @@
         <div class="card">
             <button id="startBtn" class="btn btn-start">Start Tracking</button>
             <button id="stopBtn" class="btn btn-stop hidden">Stop Tracking</button>
+        </div>
+
+        <div id="trackingCard" class="card tracking-card hidden">
+            <div class="tracking-meta">
+                <div class="pill">🔒 Tracking active</div>
+                <div>
+                    <div class="tracking-label">Current force</div>
+                    <div id="trackingAccel" class="tracking-value">0.0 m/s²</div>
+                </div>
+                <div class="tracking-time" id="trackingTime">00:00</div>
+            </div>
+            <div class="tracking-actions">
+                <div class="pill">🎧 Keep phone steady while climbing</div>
+                <button id="stopTrackingBtn" class="btn btn-stop">Stop Tracking</button>
+            </div>
         </div>
 
         <div id="liveMonitor" class="card hidden">
@@ -445,15 +457,6 @@
             </div>
             <div id="climbList" class="climb-list"></div>
         </div>
-    </div>
-
-    <div id="trackingOverlay" class="tracking-overlay hidden">
-        <div class="tracking-status">
-            <div class="tracking-label">CURRENT FORCE</div>
-            <div id="trackingAccel" class="tracking-value">0.0 m/s²</div>
-            <div id="trackingTime" class="tracking-time">00:00</div>
-        </div>
-        <button id="stopTrackingBtn" class="btn-stop-tracking">STOP TRACKING</button>
     </div>
 
     <div id="logModal" class="modal hidden">
@@ -529,7 +532,7 @@
         const stopBtn = document.getElementById('stopBtn');
         const liveMonitor = document.getElementById('liveMonitor');
         const logModal = document.getElementById('logModal');
-        const trackingOverlay = document.getElementById('trackingOverlay');
+        const trackingCard = document.getElementById('trackingCard');
         const stopTrackingBtn = document.getElementById('stopTrackingBtn');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
@@ -565,8 +568,9 @@
 
             startBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
+            trackingCard.classList.remove('hidden');
             liveMonitor.classList.remove('hidden');
-            
+
             // Request wake lock to keep screen on
             try {
                 if ('wakeLock' in navigator) {
@@ -576,10 +580,7 @@
             } catch (err) {
                 console.log('Wake lock not supported or failed:', err);
             }
-            
-            // Show tracking overlay (black screen)
-            trackingOverlay.classList.remove('hidden');
-            
+
             // Start timer
             updateTimer();
             timerInterval = setInterval(updateTimer, 1000);
@@ -616,9 +617,8 @@
                 timerInterval = null;
             }
             startTime = null;
-            
-            // Hide tracking overlay
-            trackingOverlay.classList.add('hidden');
+
+            trackingCard.classList.add('hidden');
 
             startBtn.classList.remove('hidden');
             stopBtn.classList.add('hidden');
