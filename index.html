@@ -142,11 +142,19 @@
         }
 
         #accelGraph { height: 140px; }
-        .impact-graph { height: 80px; }
+        .impact-graph { height: 80px; width: 100%; }
 
         .legend { display: flex; gap: 0.75rem; color: var(--muted); flex-wrap: wrap; font-size: 0.9rem; }
         .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
         .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+        .climb-meta { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+        .climb-meta .meta-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+        .climb-meta .label { color: var(--muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .climb-meta .value { font-weight: 800; font-size: 1.1rem; }
+        .status-pill { padding: 0.45rem 0.8rem; border-radius: 999px; font-weight: 800; letter-spacing: 0.02em; }
+        .status-pill.resting { background: rgba(148, 163, 184, 0.12); color: var(--muted); border: 1px solid var(--border); }
+        .status-pill.climbing { background: rgba(52, 211, 153, 0.15); color: #bbf7d0; border: 1px solid rgba(52, 211, 153, 0.4); }
 
         .list { display: grid; gap: 0.75rem; }
         .item {
@@ -262,6 +270,22 @@
                 <span><span class="dot" style="background:#38bdf8;"></span>Climb ~8</span>
                 <span><span class="dot" style="background:#ef4444;"></span>Landing ≥ 15</span>
             </div>
+            <div class="climb-meta">
+                <div class="meta-row">
+                    <div>
+                        <div class="label">Logging</div>
+                        <div id="climbNumber" class="value">—</div>
+                    </div>
+                    <div>
+                        <div class="label">Start time</div>
+                        <div id="climbStartTime" class="value" style="color: var(--muted);">—</div>
+                    </div>
+                </div>
+                <div class="meta-row">
+                    <span id="restingBadge" class="status-pill resting">Resting</span>
+                    <span id="climbingBadge" class="status-pill climbing hidden">Climbing</span>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -375,6 +399,10 @@
         const logModal = document.getElementById('logModal');
         const canvas = document.getElementById('accelGraph');
         const ctx = canvas.getContext('2d');
+        const climbNumberEl = document.getElementById('climbNumber');
+        const climbStartTimeEl = document.getElementById('climbStartTime');
+        const restingBadge = document.getElementById('restingBadge');
+        const climbingBadge = document.getElementById('climbingBadge');
 
         function computeAccel(event) {
             const linear = event.acceleration;
@@ -393,6 +421,11 @@
             const gz = gravitySource.z || 0;
             const magnitude = Math.sqrt(gx * gx + gy * gy + gz * gz);
             return Math.max(0, magnitude - GRAVITY);
+        }
+
+        function formatTime(date) {
+            if (!date) return '—';
+            return date.toLocaleTimeString();
         }
 
         async function startTracking() {
@@ -425,6 +458,7 @@
             startTime = Date.now();
             inClimb = false;
             currentClimb = null;
+            updateClimbMeta();
 
             sessionBtn.textContent = 'Stop session';
             sessionBtn.classList.remove('btn-start');
@@ -472,6 +506,7 @@
             startTime = null;
             inClimb = false;
             currentClimb = null;
+            updateClimbMeta();
 
             liveMonitor.classList.add('hidden');
             sessionBtn.textContent = 'Start session';
@@ -512,11 +547,31 @@
             }
         }
 
+        function updateClimbMeta() {
+            if (!climbNumberEl || !climbStartTimeEl) return;
+
+            const nextClimbNumber = climbs.length + 1;
+            climbNumberEl.textContent = isTracking ? `#${nextClimbNumber}` : '—';
+
+            const startTimeText = inClimb && currentClimb && currentClimb.startTime ? formatTime(currentClimb.startTime) : '—';
+            climbStartTimeEl.textContent = startTimeText;
+
+            if (inClimb) {
+                climbingBadge.classList.remove('hidden');
+                restingBadge.classList.add('hidden');
+            } else {
+                restingBadge.classList.remove('hidden');
+                climbingBadge.classList.add('hidden');
+            }
+        }
+
         function startClimb() {
             inClimb = true;
+            const climbStart = new Date();
             currentClimb = {
                 id: Date.now(),
-                timestamp: new Date(),
+                timestamp: climbStart,
+                startTime: climbStart,
                 success: null,
                 grade: null,
                 force: 0,
@@ -524,6 +579,7 @@
             };
 
             currentClimbId = currentClimb.id;
+            updateClimbMeta();
         }
 
         function trackClimbSample(value) {
@@ -541,9 +597,11 @@
 
             cooldown = true;
             inClimb = false;
+            currentClimb.endTime = new Date();
             peakForce = currentClimb.force;
             climbs.unshift(currentClimb);
             updateUI();
+            updateClimbMeta();
             showLogModal(currentClimb);
 
             setTimeout(() => {
@@ -599,19 +657,27 @@
             if (!targetCanvas) return;
 
             const localCtx = targetCanvas.getContext('2d');
+            const width = targetCanvas.clientWidth || targetCanvas.width;
+            const height = targetCanvas.clientHeight || targetCanvas.height || 80;
+            if (width) targetCanvas.width = width;
+            if (height) targetCanvas.height = height;
+
+            const drawWidth = targetCanvas.width;
+            const drawHeight = targetCanvas.height;
+
             localCtx.fillStyle = '#0d1727';
-            localCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+            localCtx.fillRect(0, 0, drawWidth, drawHeight);
 
             if (!samples.length) return;
 
             const maxVal = Math.max(...samples, force, LANDING_THRESHOLD);
             const minVal = 0;
             const range = Math.max(maxVal - minVal, 1);
-            const stepX = targetCanvas.width / Math.max(samples.length - 1, 1);
+            const stepX = drawWidth / Math.max(samples.length - 1, 1);
 
             localCtx.strokeStyle = '#ef4444';
             localCtx.setLineDash([4, 4]);
-            const landingY = targetCanvas.height - ((LANDING_THRESHOLD - minVal) / range) * targetCanvas.height;
+            const landingY = drawHeight - ((LANDING_THRESHOLD - minVal) / range) * drawHeight;
             localCtx.beginPath();
             localCtx.moveTo(0, landingY);
             localCtx.lineTo(targetCanvas.width, landingY);
@@ -624,7 +690,7 @@
 
             samples.forEach((value, index) => {
                 const x = index * stepX;
-                const y = targetCanvas.height - ((value - minVal) / range) * targetCanvas.height;
+                const y = drawHeight - ((value - minVal) / range) * drawHeight;
 
                 if (index === 0) {
                     localCtx.moveTo(x, y);
@@ -638,7 +704,7 @@
             const peakValue = Math.max(...samples);
             const peakIndex = samples.lastIndexOf(peakValue);
             const peakX = peakIndex * stepX;
-            const peakY = targetCanvas.height - ((peakValue - minVal) / range) * targetCanvas.height;
+            const peakY = drawHeight - ((peakValue - minVal) / range) * drawHeight;
 
             localCtx.fillStyle = '#f59e0b';
             localCtx.beginPath();
@@ -730,7 +796,7 @@
                             <span class="badge">${gradeText}</span>
                         </div>
                         <div class="meta">${time}</div>
-                        <canvas class="impact-graph" id="${graphId}" width="260" height="80"></canvas>
+                        <canvas class="impact-graph" id="${graphId}" height="80"></canvas>
                     </div>
                     <div class="row">
                         <div style="text-align: right;">
@@ -746,12 +812,16 @@
                     gradeBtn.addEventListener('click', () => gradeClimb(climb.id));
                 }
 
+                climbList.appendChild(item);
+
                 const graphCanvas = item.querySelector(`#${graphId}`);
                 renderImpactGraph(graphCanvas, climb.samples || [climb.force], climb.force);
-
-                climbList.appendChild(item);
             });
+
+            updateClimbMeta();
         }
+
+        updateClimbMeta();
 
         sessionBtn.addEventListener('click', () => {
             if (isTracking) {
