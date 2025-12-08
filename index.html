@@ -136,11 +136,13 @@
 
         canvas {
             width: 100%;
-            height: 140px;
             background: #0d1727;
             border-radius: 12px;
             border: 1px solid var(--border);
         }
+
+        #accelGraph { height: 140px; }
+        .impact-graph { height: 80px; }
 
         .legend { display: flex; gap: 0.75rem; color: var(--muted); flex-wrap: wrap; font-size: 0.9rem; }
         .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
@@ -358,6 +360,8 @@
         let startTime = null;
         let timerInterval = null;
         let currentClimbId = null;
+        let inClimb = false;
+        let currentClimb = null;
 
         const GRAVITY = 9.81;
         const REST_THRESHOLD = 2;
@@ -419,6 +423,8 @@
             isTracking = true;
             accelHistory = [];
             startTime = Date.now();
+            inClimb = false;
+            currentClimb = null;
 
             sessionBtn.textContent = 'Stop session';
             sessionBtn.classList.remove('btn-start');
@@ -464,6 +470,8 @@
                 timerInterval = null;
             }
             startTime = null;
+            inClimb = false;
+            currentClimb = null;
 
             liveMonitor.classList.add('hidden');
             sessionBtn.textContent = 'Start session';
@@ -491,30 +499,58 @@
 
             drawGraph();
 
-            if (totalAccel > LANDING_THRESHOLD && !cooldown && logModal.classList.contains('hidden')) {
-                cooldown = true;
-                peakForce = totalAccel;
-                queueClimbForGrading();
+            if (!inClimb && totalAccel >= CLIMB_THRESHOLD && !cooldown) {
+                startClimb();
+            }
 
-                setTimeout(() => {
-                    cooldown = false;
-                }, 2500);
+            if (inClimb) {
+                trackClimbSample(totalAccel);
+
+                if (totalAccel >= LANDING_THRESHOLD && !cooldown) {
+                    completeClimb();
+                }
             }
         }
 
-        function queueClimbForGrading() {
-            const climb = {
+        function startClimb() {
+            inClimb = true;
+            currentClimb = {
                 id: Date.now(),
                 timestamp: new Date(),
                 success: null,
                 grade: null,
-                force: peakForce
+                force: 0,
+                samples: []
             };
 
-            climbs.unshift(climb);
-            currentClimbId = climb.id;
+            currentClimbId = currentClimb.id;
+        }
+
+        function trackClimbSample(value) {
+            if (!currentClimb) return;
+            currentClimb.force = Math.max(currentClimb.force, value);
+            currentClimb.samples.push(value);
+
+            if (currentClimb.samples.length > HISTORY_LENGTH) {
+                currentClimb.samples.shift();
+            }
+        }
+
+        function completeClimb() {
+            if (!currentClimb) return;
+
+            cooldown = true;
+            inClimb = false;
+            peakForce = currentClimb.force;
+            climbs.unshift(currentClimb);
             updateUI();
-            showLogModal(climb);
+            showLogModal(currentClimb);
+
+            setTimeout(() => {
+                cooldown = false;
+            }, 2500);
+
+            currentClimb = null;
         }
 
         function drawGraph() {
@@ -559,6 +595,57 @@
             }
         }
 
+        function renderImpactGraph(targetCanvas, samples = [], force = 0) {
+            if (!targetCanvas) return;
+
+            const localCtx = targetCanvas.getContext('2d');
+            localCtx.fillStyle = '#0d1727';
+            localCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+
+            if (!samples.length) return;
+
+            const maxVal = Math.max(...samples, force, LANDING_THRESHOLD);
+            const minVal = 0;
+            const range = Math.max(maxVal - minVal, 1);
+            const stepX = targetCanvas.width / Math.max(samples.length - 1, 1);
+
+            localCtx.strokeStyle = '#ef4444';
+            localCtx.setLineDash([4, 4]);
+            const landingY = targetCanvas.height - ((LANDING_THRESHOLD - minVal) / range) * targetCanvas.height;
+            localCtx.beginPath();
+            localCtx.moveTo(0, landingY);
+            localCtx.lineTo(targetCanvas.width, landingY);
+            localCtx.stroke();
+            localCtx.setLineDash([]);
+
+            localCtx.strokeStyle = '#38bdf8';
+            localCtx.lineWidth = 2;
+            localCtx.beginPath();
+
+            samples.forEach((value, index) => {
+                const x = index * stepX;
+                const y = targetCanvas.height - ((value - minVal) / range) * targetCanvas.height;
+
+                if (index === 0) {
+                    localCtx.moveTo(x, y);
+                } else {
+                    localCtx.lineTo(x, y);
+                }
+            });
+
+            localCtx.stroke();
+
+            const peakValue = Math.max(...samples);
+            const peakIndex = samples.lastIndexOf(peakValue);
+            const peakX = peakIndex * stepX;
+            const peakY = targetCanvas.height - ((peakValue - minVal) / range) * targetCanvas.height;
+
+            localCtx.fillStyle = '#f59e0b';
+            localCtx.beginPath();
+            localCtx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+            localCtx.fill();
+        }
+
         function showLogModal(climb = null) {
             const forceValue = climb ? climb.force : peakForce;
             document.getElementById('peakForce').textContent = Number(forceValue).toFixed(1) + ' m/s²';
@@ -589,7 +676,7 @@
 
             climb.success = success;
             climb.grade = gradeInput.value;
-            climb.force = Number(climb.force).toFixed(1);
+            climb.force = Number(climb.force);
 
             updateUI();
             cancelLog();
@@ -634,14 +721,16 @@
                 const gradeText = isGraded ? `Grade ${climb.grade}` : 'Waiting for grade';
                 const time = climb.timestamp.toLocaleTimeString();
                 const forceText = Number(climb.force).toFixed(1) + ' m/s²';
+                const graphId = `impact-${climb.id}`;
 
                 item.innerHTML = `
-                    <div>
+                    <div style="flex:1;">
                         <div class="row" style="gap:0.4rem;">
                             <span class="badge ${badgeClass}">${label}</span>
                             <span class="badge">${gradeText}</span>
                         </div>
                         <div class="meta">${time}</div>
+                        <canvas class="impact-graph" id="${graphId}" width="260" height="80"></canvas>
                     </div>
                     <div class="row">
                         <div style="text-align: right;">
@@ -656,6 +745,9 @@
                     const gradeBtn = item.querySelector('.grade-btn');
                     gradeBtn.addEventListener('click', () => gradeClimb(climb.id));
                 }
+
+                const graphCanvas = item.querySelector(`#${graphId}`);
+                renderImpactGraph(graphCanvas, climb.samples || [climb.force], climb.force);
 
                 climbList.appendChild(item);
             });
