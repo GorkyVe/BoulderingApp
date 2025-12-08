@@ -520,6 +520,7 @@
         let wakeLock = null;
         let startTime = null;
         let timerInterval = null;
+        let currentClimbId = null;
         
         const THRESHOLD = 20;
         const HISTORY_LENGTH = 50;
@@ -534,6 +535,8 @@
         const ctx = canvas.getContext('2d');
         
         async function startTracking() {
+            if (isTracking) return;
+
             if (typeof DeviceMotionEvent !== 'undefined') {
                 if (typeof DeviceMotionEvent.requestPermission === 'function') {
                     try {
@@ -559,6 +562,10 @@
             isTracking = true;
             accelHistory = [];
             startTime = Date.now();
+
+            startBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
+            liveMonitor.classList.remove('hidden');
             
             // Request wake lock to keep screen on
             try {
@@ -590,6 +597,8 @@
         }
         
         function stopTracking() {
+            if (!isTracking) return;
+
             isTracking = false;
             window.removeEventListener('devicemotion', handleMotion);
             
@@ -610,40 +619,63 @@
             
             // Hide tracking overlay
             trackingOverlay.classList.add('hidden');
-            
+
+            startBtn.classList.remove('hidden');
+            stopBtn.classList.add('hidden');
+
             currentAccel = 0;
         }
-        
+
         function handleMotion(event) {
-            const acc = event.acceleration || event.accelerationIncludingGravity;
+            if (!isTracking) return;
+
+            const acc = event.accelerationIncludingGravity || event.acceleration;
             if (!acc) return;
-            
+
             const x = acc.x || 0;
             const y = acc.y || 0;
             const z = acc.z || 0;
-            
+
             const totalAccel = Math.sqrt(x * x + y * y + z * z);
             currentAccel = totalAccel;
-            
+
             // Update tracking overlay
             document.getElementById('trackingAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
-            
+            document.getElementById('currentAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
+
             accelHistory.push(totalAccel);
             if (accelHistory.length > HISTORY_LENGTH) {
                 accelHistory.shift();
             }
-            
+
+            drawGraph();
+
             if (totalAccel > THRESHOLD && !cooldown && logModal.classList.contains('hidden')) {
                 cooldown = true;
                 peakForce = totalAccel;
-                showLogModal();
-                
+                queueClimbForGrading();
+
                 setTimeout(() => {
                     cooldown = false;
                 }, 3000);
             }
         }
-        
+
+        function queueClimbForGrading() {
+            const climb = {
+                id: Date.now(),
+                timestamp: new Date(),
+                success: null,
+                grade: null,
+                force: peakForce
+            };
+
+            climbs.unshift(climb);
+            currentClimbId = climb.id;
+            updateUI();
+            showLogModal(climb);
+        }
+
         function drawGraph() {
             ctx.fillStyle = '#111827';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -679,38 +711,50 @@
             }
         }
         
-        function showLogModal() {
-            document.getElementById('peakForce').textContent = peakForce.toFixed(1) + ' m/s²';
+        function showLogModal(climb = null) {
+            const forceValue = climb ? climb.force : peakForce;
+            document.getElementById('peakForce').textContent = Number(forceValue).toFixed(1) + ' m/s²';
             logModal.classList.remove('hidden');
             // Keep tracking overlay visible behind modal
         }
-        
+
+        function gradeClimb(id) {
+            const climb = climbs.find(c => c.id === id);
+            if (!climb) return;
+
+            currentClimbId = climb.id;
+            peakForce = climb.force;
+            showLogModal(climb);
+        }
+
         function logClimb(success) {
             const gradeInput = document.querySelector('input[name="grade"]:checked');
             if (!gradeInput) {
                 alert('Please select a grade');
                 return;
             }
-            
-            const climb = {
-                id: Date.now(),
-                timestamp: new Date(),
-                success: success,
-                grade: gradeInput.value,
-                force: peakForce.toFixed(1)
-            };
-            
-            climbs.unshift(climb);
+
+            const climb = climbs.find(c => c.id === currentClimbId);
+            if (!climb) {
+                alert('No climb selected to grade.');
+                return;
+            }
+
+            climb.success = success;
+            climb.grade = gradeInput.value;
+            climb.force = Number(climb.force).toFixed(1);
+
             updateUI();
             cancelLog();
         }
-        
+
         function cancelLog() {
             logModal.classList.add('hidden');
             const gradeInputs = document.querySelectorAll('input[name="grade"]');
             gradeInputs.forEach(input => input.checked = false);
+            currentClimbId = null;
         }
-        
+
         function updateUI() {
             const total = climbs.length;
             const flashes = climbs.filter(c => c.success === 'flash').length;
@@ -731,24 +775,34 @@
             climbs.forEach(climb => {
                 const item = document.createElement('div');
                 item.className = 'climb-item';
-                
-                const icon = climb.success === 'flash' ? '⚡' : '🏔️';
+
+                const isGraded = climb.success && climb.grade;
+                const icon = climb.success === 'flash' ? '⚡' : climb.success === 'top' ? '🏔️' : '⏳';
                 const time = climb.timestamp.toLocaleTimeString();
-                
+
+                const gradeText = isGraded ? `Grade ${climb.grade}` : 'Awaiting grade';
+                const statusText = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Tap to grade';
+                const forceText = Number(climb.force).toFixed(1) + ' m/s²';
+
                 item.innerHTML = `
                     <div class="climb-left">
                         <div class="climb-icon">${icon}</div>
                         <div>
-                            <div class="climb-grade">Grade ${climb.grade}</div>
+                            <div class="climb-grade">${gradeText}</div>
                             <div class="climb-time">${time}</div>
                         </div>
                     </div>
                     <div style="text-align: right;">
-                        <div class="climb-force">${climb.force} m/s²</div>
-                        <div class="climb-force-label">impact</div>
+                        <div class="climb-force">${forceText}</div>
+                        <div class="climb-force-label">${statusText}</div>
                     </div>
                 `;
-                
+
+                if (!isGraded) {
+                    item.style.cursor = 'pointer';
+                    item.addEventListener('click', () => gradeClimb(climb.id));
+                }
+
                 climbList.appendChild(item);
             });
         }
