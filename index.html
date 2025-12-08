@@ -423,9 +423,16 @@
             return Math.max(0, magnitude - GRAVITY);
         }
 
+        const TIME_FORMAT = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+
         function formatTime(date) {
             if (!date) return '—';
-            return date.toLocaleTimeString();
+            return date.toLocaleTimeString([], TIME_FORMAT);
+        }
+
+        function formatForce(value) {
+            const rounded = Math.round(Number(value) || 0);
+            return `${rounded} m/s²`;
         }
 
         async function startTracking() {
@@ -525,7 +532,7 @@
             if (totalAccel === null) return;
 
             currentAccel = totalAccel;
-            document.getElementById('currentAccel').textContent = totalAccel.toFixed(1) + ' m/s²';
+            document.getElementById('currentAccel').textContent = formatForce(totalAccel);
 
             accelHistory.push(totalAccel);
             if (accelHistory.length > HISTORY_LENGTH) {
@@ -598,11 +605,12 @@
             cooldown = true;
             inClimb = false;
             currentClimb.endTime = new Date();
-            peakForce = currentClimb.force;
+            const roundedForce = Math.round(currentClimb.force);
+            currentClimb.force = roundedForce;
+            peakForce = roundedForce;
             climbs.unshift(currentClimb);
             updateUI();
             updateClimbMeta();
-            showLogModal(currentClimb);
 
             setTimeout(() => {
                 cooldown = false;
@@ -714,7 +722,7 @@
 
         function showLogModal(climb = null) {
             const forceValue = climb ? climb.force : peakForce;
-            document.getElementById('peakForce').textContent = Number(forceValue).toFixed(1) + ' m/s²';
+            document.getElementById('peakForce').textContent = formatForce(forceValue);
             logModal.classList.remove('hidden');
         }
 
@@ -785,8 +793,8 @@
                 const label = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Queued';
                 const badgeClass = isGraded ? (climb.success === 'flash' ? 'flash' : 'top') : 'queued';
                 const gradeText = isGraded ? `Grade ${climb.grade}` : 'Waiting for grade';
-                const time = climb.timestamp.toLocaleTimeString();
-                const forceText = Number(climb.force).toFixed(1) + ' m/s²';
+                const time = climb.timestamp.toLocaleTimeString([], TIME_FORMAT);
+                const forceText = formatForce(climb.force);
                 const graphId = `impact-${climb.id}`;
 
                 item.innerHTML = `
