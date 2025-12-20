@@ -231,6 +231,28 @@
 
         .flex-between { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
         .hidden { display: none; }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .settings-field {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .settings-field input {
+            width: 100%;
+            padding: 0.6rem 0.7rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #0d1727;
+            color: #e2e8f0;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -266,9 +288,9 @@
                 <canvas id="accelGraph" width="600" height="140"></canvas>
             </div>
             <div class="legend">
-                <span><span class="dot" style="background:#f97316;"></span>Rest ~2</span>
-                <span><span class="dot" style="background:#38bdf8;"></span>Climb ~8</span>
-                <span><span class="dot" style="background:#ef4444;"></span>Landing ≥ 15</span>
+                <span><span class="dot" style="background:#f97316;"></span><span id="restLegend">Rest ~2</span></span>
+                <span><span class="dot" style="background:#38bdf8;"></span><span id="climbLegend">Climb ~8</span></span>
+                <span><span class="dot" style="background:#ef4444;"></span><span id="landingLegend">Landing ≥ 15</span></span>
             </div>
             <div class="climb-meta">
                 <div class="meta-row">
@@ -285,6 +307,28 @@
                     <span id="restingBadge" class="status-pill resting">Resting</span>
                     <span id="climbingBadge" class="status-pill climbing hidden">Climbing</span>
                 </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="flex-between" style="margin-bottom: 0.5rem;">
+                <h3 style="margin: 0;">Settings</h3>
+                <span class="pill">Adjust detection thresholds</span>
+            </div>
+            <p class="info-text">Tune the sensitivity of the resting, climbing, and landing detection thresholds (m/s²).</p>
+            <div class="settings-grid">
+                <label class="settings-field">
+                    <span class="label" style="color: var(--muted);">Rest threshold</span>
+                    <input id="restThresholdInput" type="number" step="0.1" min="0" value="2">
+                </label>
+                <label class="settings-field">
+                    <span class="label" style="color: var(--muted);">Climb threshold</span>
+                    <input id="climbThresholdInput" type="number" step="0.1" min="0" value="8">
+                </label>
+                <label class="settings-field">
+                    <span class="label" style="color: var(--muted);">Landing threshold</span>
+                    <input id="landingThresholdInput" type="number" step="0.1" min="0" value="15">
+                </label>
             </div>
         </div>
 
@@ -388,9 +432,9 @@
         let currentClimb = null;
 
         const GRAVITY = 9.81;
-        const REST_THRESHOLD = 2;
-        const CLIMB_THRESHOLD = 8;
-        const LANDING_THRESHOLD = 15;
+        let restThreshold = 2;
+        let climbThreshold = 8;
+        let landingThreshold = 15;
         const HISTORY_LENGTH = 60;
 
         const sessionBtn = document.getElementById('sessionBtn');
@@ -403,6 +447,12 @@
         const climbStartTimeEl = document.getElementById('climbStartTime');
         const restingBadge = document.getElementById('restingBadge');
         const climbingBadge = document.getElementById('climbingBadge');
+        const restInput = document.getElementById('restThresholdInput');
+        const climbInput = document.getElementById('climbThresholdInput');
+        const landingInput = document.getElementById('landingThresholdInput');
+        const restLegend = document.getElementById('restLegend');
+        const climbLegend = document.getElementById('climbLegend');
+        const landingLegend = document.getElementById('landingLegend');
 
         function computeAccel(event) {
             const linear = event.acceleration;
@@ -433,6 +483,32 @@
         function formatForce(value) {
             const rounded = Math.round(Number(value) || 0);
             return `${rounded} m/s²`;
+        }
+
+        function clampThreshold(value, fallback) {
+            const parsed = parseFloat(value);
+            if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+            return parsed;
+        }
+
+        function updateThresholdDisplays() {
+            if (restLegend) restLegend.textContent = `Rest ~${restThreshold}`;
+            if (climbLegend) climbLegend.textContent = `Climb ~${climbThreshold}`;
+            if (landingLegend) landingLegend.textContent = `Landing ≥ ${landingThreshold}`;
+
+            if (restInput) restInput.value = restThreshold;
+            if (climbInput) climbInput.value = climbThreshold;
+            if (landingInput) landingInput.value = landingThreshold;
+        }
+
+        function handleThresholdChange() {
+            restThreshold = clampThreshold(restInput?.value, restThreshold);
+            climbThreshold = clampThreshold(climbInput?.value, climbThreshold);
+            landingThreshold = clampThreshold(landingInput?.value, landingThreshold);
+
+            updateThresholdDisplays();
+            drawGraph();
+            updateUI();
         }
 
         async function startTracking() {
@@ -541,14 +617,14 @@
 
             drawGraph();
 
-            if (!inClimb && totalAccel >= CLIMB_THRESHOLD && !cooldown) {
+            if (!inClimb && totalAccel >= climbThreshold && !cooldown) {
                 startClimb();
             }
 
             if (inClimb) {
                 trackClimbSample(totalAccel);
 
-                if (totalAccel >= LANDING_THRESHOLD && !cooldown) {
+                if (totalAccel >= landingThreshold && !cooldown) {
                     completeClimb();
                 }
             }
@@ -579,6 +655,7 @@
                 id: Date.now(),
                 timestamp: climbStart,
                 startTime: climbStart,
+                endTime: null,
                 success: null,
                 grade: null,
                 force: 0,
@@ -623,11 +700,11 @@
             ctx.fillStyle = '#0b1220';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const maxVal = Math.max(...accelHistory, LANDING_THRESHOLD);
+            const maxVal = Math.max(...accelHistory, landingThreshold);
             const thresholds = [
-                { value: REST_THRESHOLD, color: '#f97316' },
-                { value: CLIMB_THRESHOLD, color: '#38bdf8' },
-                { value: LANDING_THRESHOLD, color: '#ef4444', dashed: true }
+                { value: restThreshold, color: '#f97316' },
+                { value: climbThreshold, color: '#38bdf8' },
+                { value: landingThreshold, color: '#ef4444', dashed: true }
             ];
 
             thresholds.forEach(threshold => {
@@ -678,14 +755,14 @@
 
             if (!samples.length) return;
 
-            const maxVal = Math.max(...samples, force, LANDING_THRESHOLD);
+            const maxVal = Math.max(...samples, force, landingThreshold);
             const minVal = 0;
             const range = Math.max(maxVal - minVal, 1);
             const stepX = drawWidth / Math.max(samples.length - 1, 1);
 
             localCtx.strokeStyle = '#ef4444';
             localCtx.setLineDash([4, 4]);
-            const landingY = drawHeight - ((LANDING_THRESHOLD - minVal) / range) * drawHeight;
+            const landingY = drawHeight - ((landingThreshold - minVal) / range) * drawHeight;
             localCtx.beginPath();
             localCtx.moveTo(0, landingY);
             localCtx.lineTo(targetCanvas.width, landingY);
@@ -793,7 +870,8 @@
                 const label = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Queued';
                 const badgeClass = isGraded ? (climb.success === 'flash' ? 'flash' : 'top') : 'queued';
                 const gradeText = isGraded ? `Grade ${climb.grade}` : 'Waiting for grade';
-                const time = climb.timestamp.toLocaleTimeString([], TIME_FORMAT);
+                const startTimeText = formatTime(climb.startTime);
+                const stopTimeText = climb.endTime ? formatTime(climb.endTime) : '—';
                 const forceText = formatForce(climb.force);
                 const graphId = `impact-${climb.id}`;
 
@@ -803,7 +881,7 @@
                             <span class="badge ${badgeClass}">${label}</span>
                             <span class="badge">${gradeText}</span>
                         </div>
-                        <div class="meta">${time}</div>
+                        <div class="meta">Start ${startTimeText} • Stop ${stopTimeText}</div>
                         <canvas class="impact-graph" id="${graphId}" height="80"></canvas>
                     </div>
                     <div class="row">
@@ -830,6 +908,15 @@
         }
 
         updateClimbMeta();
+
+        [restInput, climbInput, landingInput].forEach(input => {
+            if (input) {
+                input.addEventListener('change', handleThresholdChange);
+                input.addEventListener('blur', handleThresholdChange);
+            }
+        });
+
+        updateThresholdDisplays();
 
         sessionBtn.addEventListener('click', () => {
             if (isTracking) {
