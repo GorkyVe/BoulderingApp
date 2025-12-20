@@ -77,6 +77,10 @@
             transition: transform 0.1s ease, box-shadow 0.1s ease;
         }
 
+        .btn-small { padding: 0.55rem 0.85rem; font-size: 0.9rem; }
+
+        .btn-danger { background: var(--danger); color: #0b1220; box-shadow: 0 10px 24px rgba(248, 113, 113, 0.3); }
+
         .btn:active { transform: translateY(1px); }
 
         .btn-start { background: linear-gradient(135deg, #22d3ee, #34d399); box-shadow: 0 12px 30px rgba(52, 211, 153, 0.3); }
@@ -352,7 +356,10 @@
         <div id="historyCard" class="card">
             <div class="flex-between" style="margin-bottom: 0.5rem;">
                 <h3 style="margin: 0;">Climb queue</h3>
-                <span id="queueInfo" class="pill">No climbs yet</span>
+                <div class="row" style="gap:0.4rem; flex-wrap: nowrap;">
+                    <button id="exportQueueBtn" class="btn btn-secondary btn-small" style="padding:0.6rem 0.8rem;">Export queue</button>
+                    <span id="queueInfo" class="pill">No climbs yet</span>
+                </div>
             </div>
             <div id="climbList" class="list"></div>
         </div>
@@ -840,6 +847,40 @@
             currentClimbId = null;
         }
 
+        function deleteClimb(id) {
+            climbs = climbs.filter(c => c.id !== id);
+            updateUI();
+        }
+
+        function exportQueue() {
+            const queuedClimbs = climbs.filter(c => !c.success || !c.grade);
+            if (!queuedClimbs.length) {
+                alert('No queued climbs to export.');
+                return;
+            }
+
+            const snapshot = queuedClimbs.map(c => ({
+                id: c.id,
+                startTime: c.startTime,
+                endTime: c.endTime,
+                force: c.force,
+                samples: c.samples,
+                success: c.success,
+                grade: c.grade
+            }));
+
+            const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            link.href = url;
+            link.download = `climb-queue-${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         function updateUI() {
             const total = climbs.length;
             const flashes = climbs.filter(c => c.success === 'flash').length;
@@ -889,13 +930,17 @@
                             <div class="force">${forceText}</div>
                             <div class="meta">Landing force</div>
                         </div>
-                        ${!isGraded ? '<button class="btn btn-secondary grade-btn">Grade</button>' : ''}
+                        ${!isGraded ? '<button class="btn btn-secondary btn-small grade-btn">Grade</button>' : ''}
+                        ${!isGraded ? '<button class="btn btn-danger btn-small delete-btn">Delete</button>' : ''}
                     </div>
                 `;
 
                 if (!isGraded) {
                     const gradeBtn = item.querySelector('.grade-btn');
                     gradeBtn.addEventListener('click', () => gradeClimb(climb.id));
+
+                    const deleteBtn = item.querySelector('.delete-btn');
+                    deleteBtn.addEventListener('click', () => deleteClimb(climb.id));
                 }
 
                 climbList.appendChild(item);
@@ -937,6 +982,8 @@
                 }
             }
         });
+
+        document.getElementById('exportQueueBtn')?.addEventListener('click', exportQueue);
     </script>
 </body>
 </html>
