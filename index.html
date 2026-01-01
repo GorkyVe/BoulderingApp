@@ -7,14 +7,14 @@
     <style>
         :root {
             color-scheme: dark;
-            --bg: #0b1220;
-            --panel: #111a2c;
-            --muted: #94a3b8;
-            --primary: #60a5fa;
-            --accent: #34d399;
-            --warning: #f59e0b;
-            --danger: #f87171;
-            --border: #1f2937;
+            --bg: #212529;
+            --panel: #343a40;
+            --muted: #adb5bd;
+            --primary: #f8f9fa;
+            --accent: #ff6b6b;
+            --warning: #fcc419;
+            --danger: #e03131;
+            --border: #495057;
         }
 
         * {
@@ -24,8 +24,8 @@
         body {
             margin: 0;
             min-height: 100vh;
-            background: radial-gradient(circle at 20% 20%, rgba(96, 165, 250, 0.08), transparent 35%),
-                        radial-gradient(circle at 80% 0%, rgba(52, 211, 153, 0.08), transparent 30%),
+            background: radial-gradient(circle at 20% 20%, rgba(52, 58, 64, 0.2), transparent 35%),
+                        radial-gradient(circle at 80% 0%, rgba(52, 58, 64, 0.2), transparent 30%),
                         var(--bg);
             color: #e2e8f0;
             font-family: "Inter", system-ui, -apple-system, sans-serif;
@@ -262,8 +262,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>📊 Boulder Tracker</h1>
-            <p>Simplified session tracker to monitor landings, log force, and grade climbs when you are ready.</p>
+            <h1>Boulder Tracker</h1>
+            <p class="info-text" style="margin: 0.25rem 0 0;">Session tracking for boulderers.</p>
         </header>
 
         <div id="permissionError" class="alert error hidden">Motion sensor access denied. Enable it in your browser settings.</div>
@@ -275,9 +275,13 @@
                     <span id="sessionStatus" class="status stopped">● Stopped</span>
                     <span class="pill">Session time <strong id="trackingTime">00:00</strong></span>
                 </div>
-                <button id="sessionBtn" class="btn btn-start">Start session</button>
+                <button id="sessionBtn" class="btn btn-start">Start Session</button>
             </div>
-            <p class="info-text" style="margin-top: 0.75rem;">Keep the phone stable in a pocket or waistband. Landings with notable spikes will be queued for grading.</p>
+            <div id="climbControls" class="hidden" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.75rem;">
+                <button id="startClimbBtn" class="btn btn-secondary">Start Climb</button>
+                <button id="endClimbBtn" class="btn btn-danger hidden">End Climb</button>
+            </div>
+            <p class="info-text" style="margin-top: 0.75rem;">Start a session to enable automatic or manual climb tracking.</p>
         </div>
 
         <div id="liveMonitor" class="card hidden">
@@ -317,22 +321,30 @@
         <div class="card">
             <div class="flex-between" style="margin-bottom: 0.5rem;">
                 <h3 style="margin: 0;">Settings</h3>
-                <span class="pill">Adjust detection thresholds</span>
+                <button id="toggleSettingsBtn" class="btn btn-secondary btn-small">Show Advanced</button>
             </div>
-            <p class="info-text">Tune the sensitivity of the resting, climbing, and landing detection thresholds (m/s²).</p>
-            <div class="settings-grid">
-                <label class="settings-field">
-                    <span class="label" style="color: var(--muted);">Rest threshold</span>
-                    <input id="restThresholdInput" type="number" step="0.1" min="0" value="2">
-                </label>
-                <label class="settings-field">
-                    <span class="label" style="color: var(--muted);">Climb threshold</span>
-                    <input id="climbThresholdInput" type="number" step="0.1" min="0" value="8">
-                </label>
-                <label class="settings-field">
-                    <span class="label" style="color: var(--muted);">Landing threshold</span>
-                    <input id="landingThresholdInput" type="number" step="0.1" min="0" value="15">
-                </label>
+            <p class="info-text" style="margin-top:0.75rem;">Select a sensitivity preset or tune manually in advanced settings.</p>
+            <div id="sensitivity-presets" style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                <button class="btn btn-secondary" data-sensitivity="low">Low</button>
+                <button class="btn btn-secondary" data-sensitivity="medium">Medium</button>
+                <button class="btn btn-secondary" data-sensitivity="high">High</button>
+            </div>
+            <div id="advanced-settings" class="hidden" style="margin-top: 0.75rem;">
+                <p class="info-text">Tune the sensitivity of the resting, climbing, and landing detection thresholds (m/s²).</p>
+                <div class="settings-grid">
+                    <label class="settings-field">
+                        <span class="label" style="color: var(--muted);">Rest threshold</span>
+                        <input id="restThresholdInput" type="number" step="0.1" min="0" value="2">
+                    </label>
+                    <label class="settings-field">
+                        <span class="label" style="color: var(--muted);">Climb threshold</span>
+                        <input id="climbThresholdInput" type="number" step="0.1" min="0" value="8">
+                    </label>
+                    <label class="settings-field">
+                        <span class="label" style="color: var(--muted);">Landing threshold</span>
+                        <input id="landingThresholdInput" type="number" step="0.1" min="0" value="15">
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -437,6 +449,7 @@
         let currentClimbId = null;
         let inClimb = false;
         let currentClimb = null;
+        let manualClimbInProgress = false;
 
         const GRAVITY = 9.81;
         let restThreshold = 2;
@@ -460,6 +473,9 @@
         const restLegend = document.getElementById('restLegend');
         const climbLegend = document.getElementById('climbLegend');
         const landingLegend = document.getElementById('landingLegend');
+        const startClimbBtn = document.getElementById('startClimbBtn');
+        const endClimbBtn = document.getElementById('endClimbBtn');
+        const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
 
         function computeAccel(event) {
             const linear = event.acceleration;
@@ -550,12 +566,13 @@
             currentClimb = null;
             updateClimbMeta();
 
-            sessionBtn.textContent = 'Stop session';
+            sessionBtn.textContent = 'Stop Session';
             sessionBtn.classList.remove('btn-start');
             sessionBtn.classList.add('btn-stop');
             sessionStatus.textContent = '● Tracking';
             sessionStatus.classList.remove('stopped');
             liveMonitor.classList.remove('hidden');
+            document.getElementById('climbControls').classList.remove('hidden');
 
             try {
                 if ('wakeLock' in navigator) {
@@ -585,6 +602,10 @@
             isTracking = false;
             window.removeEventListener('devicemotion', handleMotion);
 
+            if (inClimb) {
+                completeClimb();
+            }
+
             if (wakeLock) {
                 wakeLock.release().then(() => { wakeLock = null; });
             }
@@ -596,10 +617,14 @@
             startTime = null;
             inClimb = false;
             currentClimb = null;
+            manualClimbInProgress = false;
             updateClimbMeta();
 
             liveMonitor.classList.add('hidden');
-            sessionBtn.textContent = 'Start session';
+            document.getElementById('climbControls').classList.add('hidden');
+            startClimbBtn.classList.remove('hidden');
+            endClimbBtn.classList.add('hidden');
+            sessionBtn.textContent = 'Start Session';
             sessionBtn.classList.add('btn-start');
             sessionBtn.classList.remove('btn-stop');
             sessionStatus.textContent = '● Stopped';
@@ -624,16 +649,18 @@
 
             drawGraph();
 
-            if (!inClimb && totalAccel >= climbThreshold && !cooldown) {
-                startClimb();
-            }
-
             if (inClimb) {
                 trackClimbSample(totalAccel);
+            }
 
-                if (totalAccel >= landingThreshold && !cooldown) {
-                    completeClimb();
-                }
+            if (manualClimbInProgress) {
+                return;
+            }
+
+            if (!inClimb && totalAccel >= climbThreshold && !cooldown) {
+                startClimb();
+            } else if (inClimb && totalAccel >= landingThreshold && !cooldown) {
+                completeClimb();
             }
         }
 
@@ -686,6 +713,12 @@
         function completeClimb() {
             if (!currentClimb) return;
 
+            if (manualClimbInProgress) {
+                manualClimbInProgress = false;
+                startClimbBtn.classList.remove('hidden');
+                endClimbBtn.classList.add('hidden');
+            }
+
             cooldown = true;
             inClimb = false;
             currentClimb.endTime = new Date();
@@ -701,6 +734,32 @@
             }, 2500);
 
             currentClimb = null;
+        }
+
+        function startManualClimb() {
+            if (!isTracking || inClimb) return;
+            manualClimbInProgress = true;
+            startClimb();
+            startClimbBtn.classList.add('hidden');
+            endClimbBtn.classList.remove('hidden');
+        }
+
+        function endManualClimb() {
+            if (!isTracking || !inClimb) return;
+            completeClimb();
+        }
+
+        function setSensitivity(level) {
+            const presets = {
+                low: { rest: 1.5, climb: 6, landing: 12 },
+                medium: { rest: 2, climb: 8, landing: 15 },
+                high: { rest: 2.5, climb: 10, landing: 18 }
+            };
+            const { rest, climb, landing } = presets[level];
+            restThreshold = rest;
+            climbThreshold = climb;
+            landingThreshold = landing;
+            handleThresholdChange();
         }
 
         function drawGraph() {
@@ -893,9 +952,9 @@
 
             const queueInfo = document.getElementById('queueInfo');
             if (queued > 0) {
-                queueInfo.textContent = `${queued} queued to grade`;
+                queueInfo.textContent = `${queued} queued`;
             } else if (total > 0) {
-                queueInfo.textContent = 'All climbs graded';
+                queueInfo.textContent = 'All graded';
             } else {
                 queueInfo.textContent = 'No climbs yet';
             }
@@ -905,46 +964,43 @@
 
             climbs.forEach(climb => {
                 const item = document.createElement('div');
-                item.className = 'item';
+                item.className = 'item card';
 
                 const isGraded = climb.success && climb.grade;
                 const label = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Queued';
                 const badgeClass = isGraded ? (climb.success === 'flash' ? 'flash' : 'top') : 'queued';
-                const gradeText = isGraded ? `Grade ${climb.grade}` : 'Waiting for grade';
+                const gradeText = isGraded ? `${climb.grade}` : 'Ungraded';
                 const startTimeText = formatTime(climb.startTime);
-                const stopTimeText = climb.endTime ? formatTime(climb.endTime) : '—';
                 const forceText = formatForce(climb.force);
                 const graphId = `impact-${climb.id}`;
 
                 item.innerHTML = `
-                    <div style="flex:1;">
-                        <div class="row" style="gap:0.4rem;">
+                    <div class="flex-between">
+                        <div class="row">
                             <span class="badge ${badgeClass}">${label}</span>
                             <span class="badge">${gradeText}</span>
                         </div>
-                        <div class="meta">Start ${startTimeText} • Stop ${stopTimeText}</div>
-                        <canvas class="impact-graph" id="${graphId}" height="80"></canvas>
+                        <div class="meta">${startTimeText}</div>
                     </div>
-                    <div class="row">
-                        <div style="text-align: right;">
-                            <div class="force">${forceText}</div>
-                            <div class="meta">Landing force</div>
+                    <canvas class="impact-graph" id="${graphId}" height="100" style="margin: 0.75rem 0;"></canvas>
+                    <div class="flex-between">
+                        <div>
+                            <div class="force" style="font-size: 1.5rem;">${forceText}</div>
+                            <div class="meta">Peak Force</div>
                         </div>
-                        ${!isGraded ? '<button class="btn btn-secondary btn-small grade-btn">Grade</button>' : ''}
-                        ${!isGraded ? '<button class="btn btn-danger btn-small delete-btn">Delete</button>' : ''}
+                        <div class="row">
+                            ${!isGraded ? `<button class="btn btn-secondary btn-small grade-btn">Grade</button>
+                                          <button class="btn btn-danger btn-small delete-btn">Delete</button>` : ''}
+                        </div>
                     </div>
                 `;
 
                 if (!isGraded) {
-                    const gradeBtn = item.querySelector('.grade-btn');
-                    gradeBtn.addEventListener('click', () => gradeClimb(climb.id));
-
-                    const deleteBtn = item.querySelector('.delete-btn');
-                    deleteBtn.addEventListener('click', () => deleteClimb(climb.id));
+                    item.querySelector('.grade-btn').addEventListener('click', () => gradeClimb(climb.id));
+                    item.querySelector('.delete-btn').addEventListener('click', () => deleteClimb(climb.id));
                 }
 
                 climbList.appendChild(item);
-
                 const graphCanvas = item.querySelector(`#${graphId}`);
                 renderImpactGraph(graphCanvas, climb.samples || [climb.force], climb.force);
             });
@@ -969,6 +1025,21 @@
             } else {
                 startTracking();
             }
+        });
+
+        startClimbBtn.addEventListener('click', startManualClimb);
+        endClimbBtn.addEventListener('click', endManualClimb);
+
+        document.querySelectorAll('#sensitivity-presets button').forEach(button => {
+            button.addEventListener('click', () => {
+                setSensitivity(button.dataset.sensitivity);
+            });
+        });
+
+        toggleSettingsBtn.addEventListener('click', () => {
+            const settingsPanel = document.getElementById('advanced-settings');
+            const isHidden = settingsPanel.classList.toggle('hidden');
+            toggleSettingsBtn.textContent = isHidden ? 'Show Advanced' : 'Hide Advanced';
         });
 
         document.addEventListener('visibilitychange', async () => {
