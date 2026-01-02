@@ -162,14 +162,26 @@
 
         .list { display: grid; gap: 0.75rem; }
         .item {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
             align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
             padding: 0.85rem 1rem;
             border-radius: 12px;
             background: #0d1727;
             border: 1px solid var(--border);
+        }
+
+        .item-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 0;
+        }
+
+        .item .impact-graph-container {
+            max-width: 150px;
+            width: 30vw;
         }
 
         .item .meta { color: var(--muted); font-size: 0.9rem; }
@@ -256,6 +268,17 @@
             background: #0d1727;
             color: #e2e8f0;
             font-weight: 700;
+        }
+
+        @media (max-width: 360px) {
+            .item {
+                grid-template-columns: 1fr;
+            }
+            .item .impact-graph-container {
+                width: 100%;
+                max-width: none;
+                margin-top: 0.5rem;
+            }
         }
     </style>
 </head>
@@ -483,11 +506,23 @@
             return Math.max(0, magnitude - GRAVITY);
         }
 
-        const TIME_FORMAT = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const TIME_FORMAT = { hour12: false, hour: '2-digit', minute: '2-digit' };
 
         function formatTime(date) {
             if (!date) return '—';
             return date.toLocaleTimeString([], TIME_FORMAT);
+        }
+
+        function formatDuration(startTime, endTime) {
+            if (!startTime || !endTime) return '—';
+            const duration = Math.abs(endTime - startTime) / 1000;
+            const minutes = Math.floor(duration / 60);
+            const seconds = Math.floor(duration % 60);
+
+            if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            }
+            return `${seconds}s`;
         }
 
         function formatForce(value) {
@@ -556,6 +591,7 @@
             autoClimbBtn.textContent = 'Stop Automatic Detection';
             autoClimbBtn.classList.remove('btn-start');
             autoClimbBtn.classList.add('btn-stop');
+            document.getElementById('manualClimbBtn').classList.add('hidden');
 
             liveMonitor.classList.remove('hidden');
 
@@ -590,11 +626,13 @@
             updateClimbMeta();
 
             liveMonitor.classList.add('hidden');
+            document.querySelector('.legend').classList.remove('hidden');
 
             const autoClimbBtn = document.getElementById('autoClimbBtn');
             autoClimbBtn.textContent = 'Start Automatic Detection';
             autoClimbBtn.classList.add('btn-start');
             autoClimbBtn.classList.remove('btn-stop');
+            document.getElementById('manualClimbBtn').classList.remove('hidden');
 
             currentAccel = 0;
         }
@@ -613,7 +651,7 @@
                 accelHistory.shift();
             }
 
-            drawGraph();
+            drawGraph(manualClimbInProgress);
 
             if (inClimb) {
                 trackClimbSample(totalAccel);
@@ -720,34 +758,40 @@
             const manualClimbBtn = document.getElementById('manualClimbBtn');
             manualClimbBtn.textContent = 'End Manual Climb';
             manualClimbBtn.classList.add('btn-danger');
+            document.getElementById('autoClimbBtn').classList.add('hidden');
+            document.querySelector('.legend').classList.add('hidden');
         }
 
         function endManualClimb() {
             if (!isTracking || !inClimb) return;
             completeClimb();
+            document.getElementById('autoClimbBtn').classList.remove('hidden');
+            document.querySelector('.legend').classList.remove('hidden');
         }
 
-        function drawGraph() {
+        function drawGraph(isManualMode = false) {
             ctx.fillStyle = '#0b1220';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const maxVal = Math.max(...accelHistory, landingThreshold);
-            const thresholds = [
-                { value: restThreshold, color: '#f97316' },
-                { value: climbThreshold, color: '#38bdf8' },
-                { value: landingThreshold, color: '#ef4444', dashed: true }
-            ];
+            if (!isManualMode) {
+                const thresholds = [
+                    { value: restThreshold, color: '#f97316' },
+                    { value: climbThreshold, color: '#38bdf8' },
+                    { value: landingThreshold, color: '#ef4444', dashed: true }
+                ];
 
-            thresholds.forEach(threshold => {
-                const y = canvas.height - (threshold.value / maxVal) * canvas.height;
-                ctx.strokeStyle = threshold.color;
-                ctx.setLineDash(threshold.dashed ? [4, 4] : [2, 4]);
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
-            });
-            ctx.setLineDash([]);
+                thresholds.forEach(threshold => {
+                    const y = canvas.height - (threshold.value / maxVal) * canvas.height;
+                    ctx.strokeStyle = threshold.color;
+                    ctx.setLineDash(threshold.dashed ? [4, 4] : [2, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                });
+                ctx.setLineDash([]);
+            }
 
             if (accelHistory.length > 1) {
                 ctx.strokeStyle = '#34d399';
@@ -916,38 +960,44 @@
                 item.className = 'item card';
 
                 const isGraded = climb.success && climb.grade;
-                const label = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Queued';
+                const label = isGraded ? (climb.success === 'flash' ? 'Flash' : 'Top') : 'Ungraded';
                 const badgeClass = isGraded ? (climb.success === 'flash' ? 'flash' : 'top') : 'queued';
-                const gradeText = isGraded ? `${climb.grade}` : 'Ungraded';
+                const gradeText = isGraded ? `${climb.grade}` : '';
                 const startTimeText = formatTime(climb.startTime);
+                const durationText = formatDuration(climb.startTime, climb.endTime);
                 const forceText = formatForce(climb.force);
                 const graphId = `impact-${climb.id}`;
 
                 item.innerHTML = `
-                    <div class="flex-between">
-                        <div class="row">
-                            <span class="badge ${badgeClass}">${label}</span>
-                            <span class="badge">${gradeText}</span>
+                    <div class="item-content">
+                        <div class="flex-between">
+                             <div class="row">
+                                <span class="badge ${badgeClass}">${label}</span>
+                                ${isGraded ? `<span class="badge">${gradeText}</span>` : ''}
+                            </div>
+                            <div class="meta">${startTimeText}</div>
                         </div>
-                        <div class="meta">${startTimeText}</div>
+                        <div class="flex-between" style="align-items: flex-end;">
+                             <div>
+                                <div class="force" style="font-size: 1.5rem;">${forceText}</div>
+                                <div class="meta">Peak Force</div>
+                            </div>
+                            <div class="meta">~${durationText}</div>
+                        </div>
+                         <div class="row" style="margin-top: 0.5rem;">
+                            ${!isGraded ? `<button class="btn btn-secondary btn-small grade-btn">Grade</button>` : ''}
+                            <button class="btn btn-danger btn-small delete-btn">Delete</button>
+                        </div>
                     </div>
-                    <canvas class="impact-graph" id="${graphId}" height="100" style="margin: 0.75rem 0;"></canvas>
-                    <div class="flex-between">
-                        <div>
-                            <div class="force" style="font-size: 1.5rem;">${forceText}</div>
-                            <div class="meta">Peak Force</div>
-                        </div>
-                        <div class="row">
-                            ${!isGraded ? `<button class="btn btn-secondary btn-small grade-btn">Grade</button>
-                                          <button class="btn btn-danger btn-small delete-btn">Delete</button>` : ''}
-                        </div>
+                    <div class="impact-graph-container">
+                        <canvas class="impact-graph" id="${graphId}"></canvas>
                     </div>
                 `;
 
                 if (!isGraded) {
                     item.querySelector('.grade-btn').addEventListener('click', () => gradeClimb(climb.id));
-                    item.querySelector('.delete-btn').addEventListener('click', () => deleteClimb(climb.id));
                 }
+                item.querySelector('.delete-btn').addEventListener('click', () => deleteClimb(climb.id));
 
                 climbList.appendChild(item);
                 const graphCanvas = item.querySelector(`#${graphId}`);
