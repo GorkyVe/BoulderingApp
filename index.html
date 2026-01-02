@@ -465,6 +465,7 @@
         let inClimb = false;
         let currentClimb = null;
         let manualClimbInProgress = false;
+        let trackingSource = null;
 
         const GRAVITY = 9.81;
         let restThreshold = 2;
@@ -582,6 +583,7 @@
 
         async function beginTracking(source = 'auto') {
             isTracking = true;
+            trackingSource = source;
             accelHistory = [];
             inClimb = false;
             currentClimb = null;
@@ -625,6 +627,7 @@
             inClimb = false;
             currentClimb = null;
             manualClimbInProgress = false;
+            trackingSource = null;
             updateClimbMeta();
 
             liveMonitor.classList.add('hidden');
@@ -766,9 +769,14 @@
 
         function endManualClimb() {
             if (!isTracking || !inClimb) return;
-            completeClimb();
-            document.getElementById('autoClimbBtn').classList.remove('hidden');
-            document.querySelector('.legend').classList.remove('hidden');
+
+            if (trackingSource === 'manual') {
+                stopTracking();
+            } else {
+                completeClimb();
+                document.getElementById('autoClimbBtn').classList.remove('hidden');
+                document.querySelector('.legend').classList.remove('hidden');
+            }
         }
 
         function drawGraph(isManualMode = false) {
